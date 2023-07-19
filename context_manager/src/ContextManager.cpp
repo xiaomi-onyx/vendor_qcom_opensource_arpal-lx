@@ -27,37 +27,9 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include <iostream>
@@ -950,6 +922,7 @@ Usecase* UsecaseFactory::UsecaseCreate(int32_t usecase_id)
             ret_usecase = new UsecaseACD(usecase_id);
             break;
         case ASPS_USECASE_ID_PCM_DATA:
+        case ASPS_USECASE_ID_PCM_DATA_V2:
             ret_usecase = new UsecasePCMData(usecase_id);
             break;
         case ASPS_USECASE_ID_UPD:
@@ -1391,10 +1364,27 @@ exit:
 int32_t UsecasePCMData::Configure()
 {
     int32_t rc = 0;
+    pal_param_payload *pal_param = NULL;
     pal_audio_effect_t effect = PAL_AUDIO_EFFECT_NONE;
 
     PAL_VERBOSE(LOG_TAG, "Enter usecase:0x%x, pcm_data_type:%d",
                 this->usecase_id, this->pcm_data_type);
+
+    if (this->usecase_id == ASPS_USECASE_ID_PCM_DATA_V2) {
+        pal_param = (pal_param_payload *) calloc(1, sizeof(pal_param_payload) + sizeof(uint32_t));
+        if (!pal_param) {
+            rc = -ENOMEM;
+            goto exit;
+        }
+
+        pal_param->payload_size = sizeof(uint32_t);
+        memcpy(pal_param->payload, &(this->pcm_data_buffering), sizeof(uint32_t));
+        rc = pal_stream_set_param(this->pal_stream, PAL_PARAM_ID_CUSTOM_CONFIGURATION, pal_param);
+        if (rc) {
+            PAL_ERR(LOG_TAG, "Error:%d setting parameters to stream usecase:0x%x", rc, this->usecase_id);
+            goto exit;
+        }
+    }
 
     if (this->pcm_data_type == PCM_DATA_EFFECT_NS)
         effect = PAL_AUDIO_EFFECT_NS;
@@ -1406,6 +1396,8 @@ int32_t UsecasePCMData::Configure()
     }
 
 exit:
+    if (pal_param)
+        free(pal_param);
     PAL_VERBOSE(LOG_TAG, "Exit rc:%d", rc);
     return rc;
 }
@@ -1414,7 +1406,7 @@ int32_t UsecasePCMData::SetUseCaseData(uint32_t size, void *data)
 {
     int rc = 0;
     uint32_t pcm_data_type_requested = 0;
-    bool rx_concurrency = false;
+    uint32_t pcm_data_buffering_requested = 0;
 
     PAL_VERBOSE(LOG_TAG, "Enter usecase:0x%x, size:%d", this->usecase_id, size);
 
@@ -1422,6 +1414,21 @@ int32_t UsecasePCMData::SetUseCaseData(uint32_t size, void *data)
         rc = -EINVAL;
         PAL_ERR(LOG_TAG, "Error:%d Invalid size:%d or data:%p for usecase:0x%x", rc, size, data, this->usecase_id);
         goto exit;
+    }
+
+    if (this->usecase_id == ASPS_USECASE_ID_PCM_DATA_V2) {
+        pcm_data_buffering_requested = ((asps_pcm_data_v2_usecase_register_payload_t *)data)->requires_buffering;
+        //update the pcm_data_buffering config based on the request of sensor
+        this->pcm_data_buffering = pcm_data_buffering_requested;
+        this->pal_devices[0].config.bit_width = ((asps_pcm_data_v2_usecase_register_payload_t *)data)->bit_width;
+        this->pal_devices[0].config.sample_rate = ((asps_pcm_data_v2_usecase_register_payload_t *)data)->sample_rate;
+        this->pal_devices[0].config.ch_info.channels = ((asps_pcm_data_v2_usecase_register_payload_t *)data)->num_channels;
+
+        if (this->pal_devices[0].config.sample_rate == 16000)
+            this->pal_devices[0].id = PAL_DEVICE_IN_HANDSET_VA_MIC;
+        else if (this->pal_devices[0].config.sample_rate == 48000 ||
+                 this->pal_devices[0].config.sample_rate == 96000)
+            this->pal_devices[0].id = PAL_DEVICE_IN_ULTRASOUND_MIC;
     }
 
     pcm_data_type_requested = ((asps_pcm_data_usecase_register_payload_t *)data)->stream_type;

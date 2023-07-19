@@ -620,6 +620,7 @@ protected:
     std::map<int, std::pair<session_callback, uint64_t>> mixerEventCallbackMap;
     static std::thread mixerEventTread;
     std::shared_ptr<CaptureProfile> SoundTriggerCaptureProfile;
+    std::shared_ptr<CaptureProfile> TXMacroCaptureProfile;
     ResourceManager();
     ContextManager *ctxMgr;
 #ifdef ADSP_SLEEP_MONITOR
@@ -898,14 +899,15 @@ public:
     int HandleDetectionStreamAction(pal_stream_type_t type, int32_t action, void *data);
     void HandleStreamPauseResume(pal_stream_type_t st_type, bool active);
     std::shared_ptr<CaptureProfile> GetACDCaptureProfileByPriority(
-        StreamACD *s, std::shared_ptr<CaptureProfile> cap_prof_priority);
+        StreamACD *s, std::shared_ptr<CaptureProfile> cap_prof_priority, std::string backend);
     std::shared_ptr<CaptureProfile> GetSVACaptureProfileByPriority(
-        StreamSoundTrigger *s, std::shared_ptr<CaptureProfile> cap_prof_priority);
+        StreamSoundTrigger *s, std::shared_ptr<CaptureProfile> cap_prof_priority, std::string backend);
     std::shared_ptr<CaptureProfile> GetSPDCaptureProfileByPriority(
-        StreamSensorPCMData *s, std::shared_ptr<CaptureProfile> cap_prof_priority);
-    std::shared_ptr<CaptureProfile> GetCaptureProfileByPriority(Stream *s);
+        StreamSensorPCMData *s, std::shared_ptr<CaptureProfile> cap_prof_priority, std::string backend);
+    std::shared_ptr<CaptureProfile> GetCaptureProfileByPriority(Stream *s, std::string backend);
     bool UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active);
-    std::shared_ptr<CaptureProfile> GetSoundTriggerCaptureProfile();
+    std::shared_ptr<CaptureProfile> GetSoundTriggerCaptureProfile() const { return SoundTriggerCaptureProfile; }
+    std::shared_ptr<CaptureProfile> GetTXMacroCaptureProfile() const { return TXMacroCaptureProfile; }
     void SwitchSoundTriggerDevices(bool connect_state, pal_device_id_t st_device);
     static void mixerEventWaitThreadLoop(std::shared_ptr<ResourceManager> rm);
     bool isCallbackRegistered() { return (mixerEventRegisterCount > 0); }

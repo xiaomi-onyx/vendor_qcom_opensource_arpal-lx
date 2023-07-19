@@ -1204,6 +1204,38 @@
                 <param snd_name="va-mic-mono" />
                 <param ec_ref="true" />
             </capture_profile>
+            <capture_profile name="SINGLE_MIC_48KHZ_16BIT_RAW_LPI_TX_MACRO">
+                <param sample_rate="48000" />
+                <param channels="1" />
+                <param bit_width="16" />
+                <param snd_name="ultrasound-mic" />
+                <param ec_ref="false" />
+                <param backend="tx_macro" />
+            </capture_profile>
+            <capture_profile name="DUAL_MIC_48KHZ_16BIT_RAW_LPI_TX_MACRO">
+                <param sample_rate="48000" />
+                <param channels="2" />
+                <param bit_width="16" />
+                <param snd_name="ultrasound-dmic" />
+                <param ec_ref="false" />
+                <param backend="tx_macro" />
+            </capture_profile>
+            <capture_profile name="SINGLE_MIC_48KHZ_16BIT_RAW_LPI_NO_BUFFER_TX_MACRO">
+                <param sample_rate="48000" />
+                <param channels="1" />
+                <param bit_width="16" />
+                <param snd_name="ultrasound-mic" />
+                <param ec_ref="false" />
+                <param backend="tx_macro" />
+            </capture_profile>
+            <capture_profile name="DUAL_MIC_48KHZ_16BIT_RAW_LPI_NO_BUFFER_TX_MACRO">
+                <param sample_rate="48000" />
+                <param channels="2" />
+                <param bit_width="16" />
+                <param snd_name="ultrasound-dmic" />
+                <param ec_ref="false" />
+                <param backend="tx_macro" />
+            </capture_profile>
             <!-- SVA/Hotword Specific Profiles -->
             <capture_profile name="SINGLE_MIC_16KHZ_16BIT_HEADSET_RAW_NLPI">
                 <param sample_rate="16000" />
@@ -1511,6 +1543,7 @@
                 <operating_modes>
                     <low_power capture_profile_handset="SINGLE_MIC_16KHZ_16BIT_RAW_LPI" capture_profile_headset="SINGLE_MIC_16KHZ_16BIT_HEADSET_RAW_LPI" />
                     <low_power_ns capture_profile_handset="SINGLE_MIC_16KHZ_16BIT_FFNS" capture_profile_headset="SINGLE_MIC_16KHZ_16BIT_HEADSET_FFNS" />
+                    <low_power_tx_macro capture_profile_handset="DUAL_MIC_48KHZ_16BIT_RAW_LPI_NO_BUFFER_TX_MACRO" />
                     <high_performance capture_profile_handset="SINGLE_MIC_16KHZ_16BIT_FFEC" capture_profile_headset="SINGLE_MIC_16KHZ_16BIT_HEADSET_FFEC" />
                     <high_performance_ns capture_profile_handset="SINGLE_MIC_48KHZ_16BIT_FFECNS" capture_profile_headset="SINGLE_MIC_48KHZ_16BIT_HEADSET_FFECNS" />
                 </operating_modes>

@@ -1444,7 +1444,8 @@ void ResourceManager::ssrHandlingLoop(std::shared_ptr<ResourceManager> rm)
                     mActiveStreamMutex.lock();
                 }
 
-                SoundTriggerCaptureProfile = GetCaptureProfileByPriority(nullptr);
+                SoundTriggerCaptureProfile = GetCaptureProfileByPriority(nullptr, "va_macro");
+                TXMacroCaptureProfile = GetCaptureProfileByPriority(nullptr, "tx_macro");
                 for (auto str: rm->mActiveStreams) {
                     lockValidStreamMutex();
                     ret = increaseStreamUserCounter(str);
@@ -4773,7 +4774,8 @@ bool ResourceManager::CheckForForcedTransitToNonLPI() {
 
 
 std::shared_ptr<CaptureProfile> ResourceManager::GetACDCaptureProfileByPriority(
-    StreamACD *s, std::shared_ptr<CaptureProfile> cap_prof_priority) {
+    StreamACD *s, std::shared_ptr<CaptureProfile> cap_prof_priority,
+    std::string backend) {
     std::shared_ptr<CaptureProfile> cap_prof = nullptr;
 
        for (auto& str: active_streams_acd) {
@@ -4789,7 +4791,9 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetACDCaptureProfileByPriority(
         if (!cap_prof) {
             PAL_ERR(LOG_TAG, "Failed to get capture profile");
             continue;
-        } else if (cap_prof->ComparePriority(cap_prof_priority) ==
+        } else if (cap_prof->GetBackend().compare(backend) != 0) {
+            continue;
+        } else if (cap_prof->ComparePriority(cap_prof_priority) >=
                    CAPTURE_PROFILE_PRIORITY_HIGH) {
             cap_prof_priority = cap_prof;
         }
@@ -4799,7 +4803,8 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetACDCaptureProfileByPriority(
 }
 
 std::shared_ptr<CaptureProfile> ResourceManager::GetSVACaptureProfileByPriority(
-    StreamSoundTrigger *s, std::shared_ptr<CaptureProfile> cap_prof_priority) {
+    StreamSoundTrigger *s, std::shared_ptr<CaptureProfile> cap_prof_priority,
+    std::string backend) {
     std::shared_ptr<CaptureProfile> cap_prof = nullptr;
 
     for (auto& str: active_streams_st) {
@@ -4820,7 +4825,9 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetSVACaptureProfileByPriority(
         if (!cap_prof) {
             PAL_ERR(LOG_TAG, "Failed to get capture profile");
             continue;
-        } else if (cap_prof->ComparePriority(cap_prof_priority) ==
+        } else if (cap_prof->GetBackend().compare(backend) != 0) {
+            continue;
+        } else if (cap_prof->ComparePriority(cap_prof_priority) >=
                    CAPTURE_PROFILE_PRIORITY_HIGH) {
             cap_prof_priority = cap_prof;
         }
@@ -4830,7 +4837,8 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetSVACaptureProfileByPriority(
 }
 
 std::shared_ptr<CaptureProfile> ResourceManager::GetSPDCaptureProfileByPriority(
-    StreamSensorPCMData *s, std::shared_ptr<CaptureProfile> cap_prof_priority) {
+    StreamSensorPCMData *s, std::shared_ptr<CaptureProfile> cap_prof_priority,
+    std::string backend) {
     std::shared_ptr<CaptureProfile> cap_prof = nullptr;
 
     for (auto& str: active_streams_sensor_pcm_data) {
@@ -4844,7 +4852,9 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetSPDCaptureProfileByPriority(
             if (!cap_prof) {
                 PAL_ERR(LOG_TAG, "Failed to get capture profile");
                 continue;
-            } else if (cap_prof->ComparePriority(cap_prof_priority) ==
+            } else if (cap_prof->GetBackend().compare(backend) != 0) {
+                continue;
+            } else if (cap_prof->ComparePriority(cap_prof_priority) >=
                        CAPTURE_PROFILE_PRIORITY_HIGH) {
                 cap_prof_priority = cap_prof;
             }
@@ -4855,7 +4865,7 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetSPDCaptureProfileByPriority(
 }
 
 std::shared_ptr<CaptureProfile> ResourceManager::GetCaptureProfileByPriority(
-    Stream *s)
+    Stream *s, std::string backend)
 {
     struct pal_stream_attributes sAttr;
     StreamSoundTrigger *st_st = nullptr;
@@ -4881,9 +4891,9 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetCaptureProfileByPriority(
         st_sns_pcm_data = dynamic_cast<StreamSensorPCMData*>(s);
 
 get_priority:
-    cap_prof_priority = GetSVACaptureProfileByPriority(st_st, cap_prof_priority);
-    cap_prof_priority = GetACDCaptureProfileByPriority(st_acd, cap_prof_priority);
-    return GetSPDCaptureProfileByPriority(st_sns_pcm_data, cap_prof_priority);
+    cap_prof_priority = GetSVACaptureProfileByPriority(st_st, cap_prof_priority, backend);
+    cap_prof_priority = GetACDCaptureProfileByPriority(st_acd, cap_prof_priority, backend);
+    return GetSPDCaptureProfileByPriority(st_sns_pcm_data, cap_prof_priority, backend);
 }
 
 bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active) {
@@ -4891,6 +4901,7 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
     bool backend_update = false;
     std::shared_ptr<CaptureProfile> cap_prof = nullptr;
     std::shared_ptr<CaptureProfile> cap_prof_priority = nullptr;
+    std::shared_ptr<CaptureProfile> common_cap_prof = nullptr;
     struct pal_stream_attributes sAttr;
     StreamSoundTrigger *st_st = nullptr;
     StreamACD *st_acd = nullptr;
@@ -4932,23 +4943,39 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
             return false;
         }
 
-        if (!SoundTriggerCaptureProfile) {
-            SoundTriggerCaptureProfile = cap_prof;
-        } else if (SoundTriggerCaptureProfile->ComparePriority(cap_prof) < 0){
-            SoundTriggerCaptureProfile = cap_prof;
+        common_cap_prof = (cap_prof->GetBackend().compare("tx_macro") != 0) ?
+                          SoundTriggerCaptureProfile : TXMacroCaptureProfile;
+        if (!common_cap_prof) {
+            common_cap_prof = cap_prof;
+        } else if (cap_prof->ComparePriority(common_cap_prof) >=
+                   CAPTURE_PROFILE_PRIORITY_HIGH){
+            common_cap_prof = cap_prof;
             backend_update = true;
         }
+        ((cap_prof->GetBackend().compare("tx_macro") != 0) ?
+                          SoundTriggerCaptureProfile : TXMacroCaptureProfile) = common_cap_prof;
     } else {
-        cap_prof_priority = GetCaptureProfileByPriority(s);
-
+        /* Updating SoundTriggerCaptureProfile for streams use VA Macro capture profiles */
+        cap_prof_priority = GetCaptureProfileByPriority(s, "va_macro");
         if (!cap_prof_priority) {
-            PAL_DBG(LOG_TAG, "No SVA session active, reset capture profile");
+            PAL_DBG(LOG_TAG, "No session active, reset VA Macro common capture profiles");
             SoundTriggerCaptureProfile = nullptr;
-        } else if (cap_prof_priority->ComparePriority(SoundTriggerCaptureProfile) != 0) {
-            SoundTriggerCaptureProfile = cap_prof_priority;
-            backend_update = true;
+        } else if (cap_prof_priority->ComparePriority(SoundTriggerCaptureProfile) >=
+                CAPTURE_PROFILE_PRIORITY_HIGH) {
+                SoundTriggerCaptureProfile = cap_prof_priority;
+                backend_update = true;
         }
 
+        /* Updating TXMacroCaptureProfile for streams use TX Macro capture profiles */
+        cap_prof_priority = GetCaptureProfileByPriority(s, "tx_macro");
+        if (!cap_prof_priority) {
+            PAL_DBG(LOG_TAG, "No session active, reset TX Macro common capture profiles");
+            TXMacroCaptureProfile = nullptr;
+        } else if (cap_prof_priority->ComparePriority(TXMacroCaptureProfile) >=
+                CAPTURE_PROFILE_PRIORITY_HIGH) {
+                TXMacroCaptureProfile = cap_prof_priority;
+                backend_update = true;
+        }
     }
 
     return backend_update;
@@ -4974,14 +5001,26 @@ void ResourceManager::SwitchSoundTriggerDevices(bool connect_state,
         goto exit;
     }
 
+    /* Updating SoundTriggerCaptureProfile for streams use VA Macro capture profiles */
     SoundTriggerCaptureProfile = nullptr;
-    cap_prof_priority = GetCaptureProfileByPriority(nullptr);
+    cap_prof_priority = GetCaptureProfileByPriority(nullptr, "va_macro");
     if (!cap_prof_priority) {
-        PAL_DBG(LOG_TAG, "No SVA/ACD session active, reset capture profile");
+        PAL_DBG(LOG_TAG, "No ST session active, reset VA Macro capture profile");
         SoundTriggerCaptureProfile = nullptr;
-    } else if (cap_prof_priority->ComparePriority(SoundTriggerCaptureProfile) ==
-               CAPTURE_PROFILE_PRIORITY_HIGH) {
+    } else if (cap_prof_priority->ComparePriority(SoundTriggerCaptureProfile) >=
+            CAPTURE_PROFILE_PRIORITY_HIGH) {
         SoundTriggerCaptureProfile = cap_prof_priority;
+    }
+
+    /* Updating TXMacroCaptureProfile for streams use TX Macro capture profiles */
+    TXMacroCaptureProfile = nullptr;
+    cap_prof_priority = GetCaptureProfileByPriority(nullptr, "tx_macro");
+    if (!cap_prof_priority) {
+        PAL_DBG(LOG_TAG, "No ST session active, reset TX Macro capture profile");
+        TXMacroCaptureProfile = nullptr;
+    } else if (cap_prof_priority->ComparePriority(TXMacroCaptureProfile) >=
+            CAPTURE_PROFILE_PRIORITY_HIGH) {
+        TXMacroCaptureProfile = cap_prof_priority;
     }
 
     if (true == connect_state) {
@@ -5019,10 +5058,6 @@ void ResourceManager::SwitchSoundTriggerDevices(bool connect_state,
 
 exit:
     PAL_DBG(LOG_TAG, "Exit");
-}
-
-std::shared_ptr<CaptureProfile> ResourceManager::GetSoundTriggerCaptureProfile() {
-    return SoundTriggerCaptureProfile;
 }
 
 /* NOTE: there should be only one callback for each pcm id
@@ -5411,15 +5446,26 @@ void ResourceManager::handleConcurrentStreamSwitch(std::vector<pal_stream_type_t
 
     // update common capture profile after use_lpi_ updated for all streams
     if (st_streams.size()) {
+        /* Updating SoundTriggerCaptureProfile for streams use VA Macro capture profiles */
         SoundTriggerCaptureProfile = nullptr;
-        cap_prof_priority = GetCaptureProfileByPriority(nullptr);
-
+        cap_prof_priority = GetCaptureProfileByPriority(nullptr, "va_macro");
         if (!cap_prof_priority) {
-            PAL_DBG(LOG_TAG, "No ST session active, reset capture profile");
+            PAL_DBG(LOG_TAG, "No session active, reset VA Macro common capture profile");
             SoundTriggerCaptureProfile = nullptr;
-        } else if (cap_prof_priority->ComparePriority(SoundTriggerCaptureProfile) ==
+        } else if (cap_prof_priority->ComparePriority(SoundTriggerCaptureProfile) >=
                 CAPTURE_PROFILE_PRIORITY_HIGH) {
             SoundTriggerCaptureProfile = cap_prof_priority;
+        }
+
+        /* Updating TXMacroCaptureProfile for streams use TX Macro capture profiles */
+        TXMacroCaptureProfile = nullptr;
+        cap_prof_priority = GetCaptureProfileByPriority(nullptr, "tx_macro");
+        if (!cap_prof_priority) {
+            PAL_DBG(LOG_TAG, "No session active, reset TX Macro common capture profile");
+            TXMacroCaptureProfile = nullptr;
+        } else if (cap_prof_priority->ComparePriority(TXMacroCaptureProfile) >=
+                CAPTURE_PROFILE_PRIORITY_HIGH) {
+            TXMacroCaptureProfile = cap_prof_priority;
         }
     }
 
@@ -8055,10 +8101,12 @@ bool ResourceManager::updateDeviceConfig(std::shared_ptr<Device> *inDev,
         goto error;
     }
 
-    /* Soundtrigger stream device attributes is updated via capture profile */
+    /* Soundtrigger stream device attributes is updated via capture profile.
+     * PAL_STREAM_SENSOR_PCM_DATA device attributes will be updated here due
+     * to it receives device configurations from Sensor clients.
+     */
     if (inStrAttr->type == PAL_STREAM_ACD ||
-        inStrAttr->type == PAL_STREAM_VOICE_UI ||
-        inStrAttr->type == PAL_STREAM_SENSOR_PCM_DATA)
+        inStrAttr->type == PAL_STREAM_VOICE_UI)
         goto error;
 
     if (strlen(inDevAttr->custom_config.custom_key))
