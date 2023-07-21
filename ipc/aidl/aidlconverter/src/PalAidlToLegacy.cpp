@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -35,6 +35,8 @@ void AidlToLegacy::convertPalStreamAttributes(const PalStreamAttributes &aidlCon
     palStreamAttributes->info.opt_stream_info.version = aidlConfig.info.version;
     palStreamAttributes->info.opt_stream_info.size = aidlConfig.info.size;
     palStreamAttributes->info.opt_stream_info.duration_us = aidlConfig.info.durationUs;
+    palStreamAttributes->info.opt_stream_info.rx_proxy_type = aidlConfig.info.rxProxyType;
+    palStreamAttributes->info.opt_stream_info.tx_proxy_type = aidlConfig.info.txProxyType;
     palStreamAttributes->info.opt_stream_info.has_video = aidlConfig.info.hasVideo;
     palStreamAttributes->info.opt_stream_info.is_streaming = aidlConfig.info.isStreaming;
     palStreamAttributes->info.opt_stream_info.loopback_type = aidlConfig.info.loopbackType;
