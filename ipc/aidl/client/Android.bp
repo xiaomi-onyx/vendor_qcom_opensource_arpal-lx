@@ -10,7 +10,7 @@ cc_library_shared {
     ],
     tidy: true,
 
-    include_dirs: ["vendor/qcom/opensource/pal/inc"],
+    include_dirs: ["hardware/qcom-caf/sm8750/audio/pal/inc"],
 
     srcs: [
         "PalClientWrapper.cpp",
