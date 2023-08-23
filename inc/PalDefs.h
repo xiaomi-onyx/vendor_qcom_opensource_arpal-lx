@@ -400,6 +400,7 @@ typedef enum {
     PAL_STREAM_ULTRASOUND = 26,           /**< Ultrasound Proximity detection */
     PAL_STREAM_SPATIAL_AUDIO = 27,        /**< Spatial audio playback */
     PAL_STREAM_COMMON_PROXY = 28,         /**< AFS's WakeUp Algo library detection */
+    PAL_STREAM_SENSOR_PCM_RENDERER = 29,  /**< Sensor Pcm Rendering Stream */
     PAL_STREAM_MAX,                       /**< max stream types - add new ones above */
 } pal_stream_type_t;
 
@@ -632,6 +633,7 @@ const std::map<std::string, uint32_t> usecaseIdLUT {
     {std::string{ "PAL_STREAM_SPATIAL_AUDIO" },            PAL_STREAM_SPATIAL_AUDIO},
     {std::string{ "PAL_STREAM_CONTEXT_PROXY" },            PAL_STREAM_CONTEXT_PROXY},
     {std::string{ "PAL_STREAM_COMMON_PROXY" },             PAL_STREAM_COMMON_PROXY},
+    {std::string{ "PAL_STREAM_SENSOR_PCM_RENDERER" },      PAL_STREAM_SENSOR_PCM_RENDERER},
 };
 
 /* Update the reverse mapping as well when new stream is added */
@@ -664,6 +666,7 @@ const std::map<uint32_t, std::string> streamNameLUT {
     {PAL_STREAM_SENSOR_PCM_DATA,    std::string{ "PAL_STREAM_SENSOR_PCM_DATA" } },
     {PAL_STREAM_SPATIAL_AUDIO,      std::string{ "PAL_STREAM_SPATIAL_AUDIO" } },
     {PAL_STREAM_COMMON_PROXY,       std::string{ "PAL_STREAM_COMMON_PROXY" } },
+    {PAL_STREAM_SENSOR_PCM_RENDERER,std::string{ "PAL_STREAM_SENSOR_PCM_RENDERER" } },
 };
 
 const std::map<uint32_t, std::string> vsidLUT {
