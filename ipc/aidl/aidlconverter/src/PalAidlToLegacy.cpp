@@ -99,7 +99,7 @@ void AidlToLegacy::convertPalCallbackBuffer(const PalCallbackBuffer *rwDonePaylo
                                             pal_callback_buffer *cbBuffer) {
     cbBuffer->size = rwDonePayload->size;
     std::vector<uint8_t> buffData;
-    if (rwDonePayload->buffer.size() == cbBuffer->size) {
+    if (cbBuffer->size > 0 && rwDonePayload->buffer.size() == cbBuffer->size) {
         buffData.resize(cbBuffer->size);
         memcpy(buffData.data(), rwDonePayload->buffer.data(), cbBuffer->size);
         cbBuffer->buffer = buffData.data();

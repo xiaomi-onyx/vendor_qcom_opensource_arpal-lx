@@ -13564,6 +13564,7 @@ void ResourceManager::restoreDevice(std::shared_ptr<Device> dev)
         dev = Device::getInstance(&newDevAttr, rm);
         if (!dev) {
             PAL_ERR(LOG_TAG, "Getting headset device instance failed");
+            mActiveStreamMutex.unlock();
             goto exit;
         }
         dev->getDeviceAttributes(&newDevAttr);
