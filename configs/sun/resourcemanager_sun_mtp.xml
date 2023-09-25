@@ -40,6 +40,7 @@
         <param key="hifi_filter" value="false"/>
         <param key="max_sessions" value="128"/>
         <param key="max_nonTunnel_sessions" value="4"/>
+        <param key="xpan_enabled" value ="true" />
         <param key="logging_level" value ="3" />
         <param key="context_manager_enable" value ="true" />
         <param key="upd_dedicated_be" value ="false" />
@@ -77,6 +78,7 @@
         <codec codec_format="CODEC_TYPE_APTX_AD_SPEECH" codec_type="enc|dec" codec_library="lib_bt_aptx.so" />
         <codec codec_format="CODEC_TYPE_LC3" codec_type="enc|dec" codec_library="lib_bt_ble.so" />
         <codec codec_format="CODEC_TYPE_APTX_AD_QLEA" codec_type="enc" codec_library="lib_bt_ble.so" />
+        <codec codec_format="CODEC_TYPE_APTX_AD_R4" codec_type="enc|dec" codec_library="lib_bt_ble.so" />
     </bt_codecs>
     <gain_db_to_level_mapping>
         <gain_level_map db="-59" level="5"/>
@@ -414,7 +416,7 @@
         </in-device>
         <in-device>
             <id>PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET</id>
-            <back_end_name>SLIM-DEV1-TX-7</back_end_name>
+            <back_end_name>BTFM_PROXY-TX-0</back_end_name>
             <max_channels>1</max_channels>
             <channels>1</channels>
             <samplerate>8000</samplerate>
@@ -574,7 +576,7 @@
         </in-device>
         <in-device>
             <id>PAL_DEVICE_IN_BLUETOOTH_A2DP</id>
-            <back_end_name>SLIM-DEV1-TX-7</back_end_name>
+            <back_end_name>BTFM_PROXY-TX-0</back_end_name>
             <max_channels>1</max_channels>
             <channels>1</channels>
             <snd_device_name>bt-a2dp-mic</snd_device_name>
@@ -583,7 +585,7 @@
         </in-device>
         <in-device>
             <id>PAL_DEVICE_IN_BLUETOOTH_BLE</id>
-            <back_end_name>SLIM-DEV1-TX-7</back_end_name>
+            <back_end_name>BTFM_PROXY-TX-0</back_end_name>
             <max_channels>1</max_channels>
             <channels>1</channels>
             <snd_device_name>bt-ble-mic</snd_device_name>
@@ -846,7 +848,7 @@
          </out-device>
         <out-device>
             <id>PAL_DEVICE_OUT_BLUETOOTH_A2DP</id>
-            <back_end_name>SLIM-DEV1-RX-7</back_end_name>
+            <back_end_name>BTFM_PROXY-RX-0</back_end_name>
             <max_channels>1</max_channels>
             <channels>1</channels>
             <snd_device_name>bt-a2dp</snd_device_name>
@@ -859,7 +861,7 @@
         </out-device>
         <out-device>
             <id>PAL_DEVICE_OUT_BLUETOOTH_BLE</id>
-            <back_end_name>SLIM-DEV1-RX-7</back_end_name>
+            <back_end_name>BTFM_PROXY-RX-0</back_end_name>
             <max_channels>1</max_channels>
             <channels>1</channels>
             <snd_device_name>bt-ble</snd_device_name>
@@ -872,7 +874,7 @@
         </out-device>
         <out-device>
             <id>PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST</id>
-            <back_end_name>SLIM-DEV1-RX-7</back_end_name>
+            <back_end_name>BTFM_PROXY-RX-0</back_end_name>
             <max_channels>1</max_channels>
             <channels>1</channels>
             <snd_device_name>bt-ble</snd_device_name>
@@ -881,7 +883,7 @@
         </out-device>
         <out-device>
             <id>PAL_DEVICE_OUT_BLUETOOTH_SCO</id>
-            <back_end_name>SLIM-DEV1-RX-7</back_end_name>
+            <back_end_name>BTFM_PROXY-RX-0</back_end_name>
             <max_channels>1</max_channels>
             <channels>1</channels>
             <snd_device_name>bt-sco</snd_device_name>
