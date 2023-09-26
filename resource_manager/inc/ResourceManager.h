@@ -628,6 +628,8 @@ protected:
     std::shared_ptr<SignalHandler> mSigHandler;
     static std::vector<int> spViChannelMapCfg;
     std::map<int, bool> PCMDataInstances;
+    std::unordered_map<int, pal_stream_handle_t *> mStCaptureInfo;
+
 public:
     ~ResourceManager();
     static bool mixerClosed;
@@ -1066,6 +1068,7 @@ public:
     int32_t reconfigureInCallMusicStream(struct sessionToPayloadParam deviceData);
     int32_t resumeInCallMusic();
     int32_t pauseInCallMusic();
+    void RegisterSTCaptureHandle(pal_param_st_capture_info_t stCaptureInfo, bool start);
 };
 
 #endif

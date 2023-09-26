@@ -1012,6 +1012,7 @@ typedef enum {
     PAL_PARAM_ID_VUI_CAPTURE_META_DATA = 71,
     PAL_PARAM_ID_TIMESTRETCH_PARAMS = 72,
     PAL_PARAM_ID_LATENCY_MODE = 73,
+    PAL_PARAM_ID_ST_CAPTURE_INFO = 74,
 } pal_param_id_type_t;
 
 /** HDMI/DP */
@@ -1127,6 +1128,14 @@ typedef struct pal_param_charger_state {
     bool              is_charger_online;
     bool              is_concurrent_boost_enable;
 } pal_param_charger_state_t;
+
+/* Payload For ID: PAL_PARAM_ID_ST_CAPTURE_INFO
+ * Description   : Capture pal_handle in resource_manager
+ */
+typedef struct pal_param_st_capture_info {
+    int                   capture_handle;
+    pal_stream_handle_t   *pal_handle;
+} pal_param_st_capture_info_t;
 
 /*
  * Used to identify the swapping type

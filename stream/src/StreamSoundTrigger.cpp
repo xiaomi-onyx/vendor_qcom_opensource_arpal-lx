@@ -321,6 +321,20 @@ int32_t StreamSoundTrigger::close() {
     return status;
 }
 
+void StreamSoundTrigger::UpdateCaptureHandleInfo(bool start) {
+    PAL_INFO(LOG_TAG, "start %d, capture requested %d, capture handle %d,"
+                " pal handle %pK", start, rec_config_->capture_requested,
+                rec_config_->capture_handle, this);
+
+    if (!rec_config_->capture_requested) {
+        return;
+    }
+    pal_param_st_capture_info_t stCaptureInfo;
+    stCaptureInfo.capture_handle = rec_config_->capture_handle;
+    stCaptureInfo.pal_handle = reinterpret_cast<pal_stream_handle_t *>(this);
+    rm->RegisterSTCaptureHandle(stCaptureInfo, start);
+}
+
 int32_t StreamSoundTrigger::start() {
     int32_t status = 0;
     stream_state_t prev_state;
@@ -342,9 +356,11 @@ int32_t StreamSoundTrigger::start() {
        new StStartRecognitionEventConfig(false));
     status = cur_state_->ProcessEvent(ev_cfg);
     // restore cached state if start fails
-    if (status)
+    if (status) {
         currentState = prev_state;
-
+    } else {
+        UpdateCaptureHandleInfo(true);
+    }
     palStateEnqueue(this, PAL_STATE_STARTED, status);
     rm->unlockActiveStream();
     PAL_DBG(LOG_TAG, "Exit, status %d", status);
@@ -362,6 +378,7 @@ int32_t StreamSoundTrigger::stop() {
      */
     rm->lockActiveStream();
     std::lock_guard<std::mutex> lck(mStreamMutex);
+    UpdateCaptureHandleInfo(false);
     currentState = STREAM_STOPPED;
 
     std::shared_ptr<StEventConfig> ev_cfg(

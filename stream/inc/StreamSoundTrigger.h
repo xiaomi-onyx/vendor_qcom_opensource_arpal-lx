@@ -536,6 +536,7 @@ private:
     int32_t GetPreviousStateId();
     int32_t ProcessInternalEvent(std::shared_ptr<StEventConfig> ev_cfg);
     void GetUUID(class SoundTriggerUUID *uuid, struct pal_st_sound_model *sound_model);
+    void UpdateCaptureHandleInfo(bool start);
     std::shared_ptr<VoiceUIPlatformInfo> vui_ptfm_info_;
     std::shared_ptr<VUIStreamConfig> sm_cfg_;
     SoundModelInfo* sm_info_;
