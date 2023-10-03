@@ -2,10 +2,10 @@
  * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
-#include <aidl/vendor/qti/hardware/pal/IPAL.h>
-#include <aidl/vendor/qti/hardware/pal/BnPALCallback.h>
-#include <aidl/vendor/qti/hardware/pal/PalReadWriteDoneResult.h>
 #include "PalCallback.h"
+#include <aidl/vendor/qti/hardware/pal/BnPALCallback.h>
+#include <aidl/vendor/qti/hardware/pal/IPAL.h>
+#include <aidl/vendor/qti/hardware/pal/PalReadWriteDoneResult.h>
 #include <log/log.h>
 #include <pal/BinderStatus.h>
 
@@ -23,9 +23,8 @@ void DataTransferThread::startTransfer(int eventId) {
         const PalCallbackBuffer *rwDonePayload = (PalCallbackBuffer *)&mBuffer[0];
         auto cbBuffer = std::make_unique<pal_callback_buffer>();
         AidlToLegacy::convertPalCallbackBuffer(rwDonePayload, cbBuffer.get());
-        mStreamCallback((pal_stream_handle_t *)mStreamHandle, eventId,
-                        (uint32_t *)cbBuffer.get(), (uint32_t)availToRead,
-                        mStreamCookie);
+        mStreamCallback((pal_stream_handle_t *)mStreamHandle, eventId, (uint32_t *)cbBuffer.get(),
+                        (uint32_t)availToRead, mStreamCookie);
     }
 }
 
@@ -34,7 +33,7 @@ bool DataTransferThread::threadLoop() {
         uint32_t efState = 0;
         mEfGroup->wait(static_cast<uint32_t>(PalMessageQueueFlagBits::NOT_EMPTY), &efState);
         if (!(efState & static_cast<uint32_t>(PalMessageQueueFlagBits::NOT_EMPTY))) {
-            continue;  // Nothing to do.
+            continue; // Nothing to do.
         }
         PalReadWriteDoneCommand eventId;
         if (!mCommandMQ->read(&eventId)) {
@@ -47,14 +46,13 @@ bool DataTransferThread::threadLoop() {
     return false;
 }
 
-::ndk::ScopedAStatus PalCallback::prepare_mq_for_transfer(int64_t streamHandle,
-                            int64_t cookie, PalCallbackReturnData* callbackData) {
+::ndk::ScopedAStatus PalCallback::prepareMQForTransfer(int64_t handle, int64_t cookie,
+                                                       PalCallbackReturnData *callbackData) {
     status_t status;
     // Create message queues.
     if (mDataMQ) {
         ALOGE("the client attempts to call prepareForWriting twice");
         callbackData->ret = PalReadWriteDoneResult::INVALID_STATE;
-        //TODO See if better retrun value can be returned.
         return status_tToBinderResult(-EINVAL);
     }
 
@@ -68,10 +66,10 @@ bool DataTransferThread::threadLoop() {
         callbackData->ret = PalReadWriteDoneResult::INVALID_ARGUMENTS;
         return status_tToBinderResult(-EINVAL);
     }
-    EventFlag* tempRawEfGroup{};
+    EventFlag *tempRawEfGroup{};
     status = EventFlag::createEventFlag(tempDataMQ->getEventFlagWord(), &tempRawEfGroup);
-    std::unique_ptr<EventFlag, void (*)(EventFlag*)> tempElfGroup(
-        tempRawEfGroup, [](auto* ef) { EventFlag::deleteEventFlag(&ef); });
+    std::unique_ptr<EventFlag, void (*)(EventFlag *)> tempElfGroup(
+            tempRawEfGroup, [](auto *ef) { EventFlag::deleteEventFlag(&ef); });
     if (status != ::android::OK || !tempElfGroup) {
         ALOGE("failed creating event flag for data MQ: %s", strerror(-status));
         callbackData->ret = PalReadWriteDoneResult::INVALID_ARGUMENTS;
@@ -80,8 +78,8 @@ bool DataTransferThread::threadLoop() {
 
     // Create and launch the thread.
     auto tempDataTransferThread = sp<DataTransferThread>::make(
-                                  &mStopDataTransferThread, streamHandle, cb, tempDataMQ.get(),
-                                  tempCommandMQ.get(), tempElfGroup.get(), cookie);
+            &mStopDataTransferThread, handle, mCallback, tempDataMQ.get(), tempCommandMQ.get(),
+            tempElfGroup.get(), cookie);
     if (!tempDataTransferThread->init()) {
         ALOGW("failed to start writer thread: %s", strerror(-status));
         callbackData->ret = PalReadWriteDoneResult::INVALID_ARGUMENTS;
@@ -99,53 +97,50 @@ bool DataTransferThread::threadLoop() {
     mDataTransferThread = tempDataTransferThread;
     mEfGroup = tempElfGroup.release();
     callbackData->ret = PalReadWriteDoneResult::OK;
-    callbackData->mqDataDesc =  mDataMQ->dupeDesc();
-    callbackData->mqCommandDesc =  mCommandMQ->dupeDesc();
+    callbackData->mqDataDesc = mDataMQ->dupeDesc();
+    callbackData->mqCommandDesc = mCommandMQ->dupeDesc();
     return ::ndk::ScopedAStatus::ok();
 }
 
-::ndk::ScopedAStatus PalCallback::event_callback(int64_t in_streamHandle,
-                                                 int32_t in_event_id,
-                                                 int32_t in_event_data_size,
-                                                 const std::vector<uint8_t>& in_event_data,
-                                                 int64_t in_cookie)
-{
-    uint32_t *ev_data = NULL;
+::ndk::ScopedAStatus PalCallback::eventCallback(int64_t handle, int32_t eventId,
+                                                int32_t eventDataSize,
+                                                const std::vector<uint8_t> &eventData,
+                                                int64_t cookie) {
+    uint32_t *evData = NULL;
     int8_t *src = NULL;
-    ev_data = (uint32_t *) calloc(1, in_event_data_size);
-    if (!ev_data) {
+    evData = (uint32_t *)calloc(1, eventDataSize);
+    if (!evData) {
         goto exit;
     }
 
-    src = (int8_t *) in_event_data.data();
-    memcpy(ev_data, src, in_event_data_size);
+    src = (int8_t *)eventData.data();
+    memcpy(evData, src, eventDataSize);
 
-    this->cb((pal_stream_handle_t *) in_streamHandle, in_event_id, ev_data, in_event_data_size, in_cookie);
+    mCallback((pal_stream_handle_t *)handle, eventId, evData, eventDataSize, cookie);
 
-    exit:
-        if (ev_data){
-            free(ev_data);
-        }
-        return ::ndk::ScopedAStatus::ok();
+exit:
+    if (evData) {
+        free(evData);
+    }
+    return ::ndk::ScopedAStatus::ok();
 }
 
-::ndk::ScopedAStatus PalCallback::event_callback_rw_done(int64_t in_streamHandle,
-        int32_t in_event_id,
-	int32_t in_event_data_size,
-        const std::vector<::aidl::vendor::qti::hardware::pal::PalCallbackBuffer>& in_rw_done_payload,
-        int64_t in_cookie)
-{
-    const ::aidl::vendor::qti::hardware::pal::PalCallbackBuffer *rwDonePayload = in_rw_done_payload.data();
+::ndk::ScopedAStatus PalCallback::eventCallbackRWDone(
+        int64_t handle, int32_t eventId, int32_t eventDataSize,
+        const std::vector<::aidl::vendor::qti::hardware::pal::PalCallbackBuffer> &aidlRWDonePayload,
+        int64_t cookie) {
+    const ::aidl::vendor::qti::hardware::pal::PalCallbackBuffer *rwDonePayload =
+            aidlRWDonePayload.data();
     auto cbBuffer = std::make_unique<pal_callback_buffer>();
 
     AidlToLegacy::convertPalCallbackBuffer(rwDonePayload, cbBuffer.get());
-    this->cb((pal_stream_handle_t *) in_streamHandle, in_event_id, (uint32_t *) cbBuffer.get(), in_event_data_size, in_cookie);
+    mCallback((pal_stream_handle_t *)handle, eventId, (uint32_t *)cbBuffer.get(), eventDataSize,
+              cookie);
 
     return ::ndk::ScopedAStatus::ok();
 }
 
-PalCallback::~PalCallback()
-{
+void PalCallback::cleanupDataTransferThread() {
     mStopDataTransferThread.store(true, std::memory_order_release);
     if (mEfGroup) {
         mEfGroup->wake(static_cast<uint32_t>(PalMessageQueueFlagBits::NOT_EMPTY));
@@ -158,5 +153,9 @@ PalCallback::~PalCallback()
         status_t status = EventFlag::deleteEventFlag(&mEfGroup);
         ALOGE_IF(status, "write MQ event flag deletion error: %s", strerror(-status));
     }
+}
+
+PalCallback::~PalCallback() {
+    cleanupDataTransferThread();
 }
 }

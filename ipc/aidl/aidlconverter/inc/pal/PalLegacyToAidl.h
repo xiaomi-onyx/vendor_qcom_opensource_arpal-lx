@@ -5,55 +5,54 @@
 
 #pragma once
 
-
-#include <aidl/vendor/qti/hardware/pal/PalStreamAttributes.h>
-#include <aidl/vendor/qti/hardware/pal/PalDevice.h>
+#include <PalDefs.h>
 #include <aidl/vendor/qti/hardware/pal/ModifierKV.h>
-#include <aidl/vendor/qti/hardware/pal/PalDrainType.h>
-#include <aidl/vendor/qti/hardware/pal/PalBufferConfig.h>
-#include <aidl/vendor/qti/hardware/pal/PalBuffer.h>
-#include <aidl/vendor/qti/hardware/pal/PalParamPayload.h>
 #include <aidl/vendor/qti/hardware/pal/PalAudioEffect.h>
+#include <aidl/vendor/qti/hardware/pal/PalBuffer.h>
+#include <aidl/vendor/qti/hardware/pal/PalBufferConfig.h>
+#include <aidl/vendor/qti/hardware/pal/PalDevice.h>
+#include <aidl/vendor/qti/hardware/pal/PalDrainType.h>
 #include <aidl/vendor/qti/hardware/pal/PalMmapBuffer.h>
 #include <aidl/vendor/qti/hardware/pal/PalMmapPosition.h>
-#include <aidl/vendor/qti/hardware/pal/PalVolumeData.h>
+#include <aidl/vendor/qti/hardware/pal/PalParamPayload.h>
 #include <aidl/vendor/qti/hardware/pal/PalSessionTime.h>
-#include <PalDefs.h>
+#include <aidl/vendor/qti/hardware/pal/PalStreamAttributes.h>
+#include <aidl/vendor/qti/hardware/pal/PalVolumeData.h>
 
 namespace aidl::vendor::qti::hardware::pal {
 
 struct LegacyToAidl {
+    static PalStreamAttributes convertPalStreamAttributesToAidl(
+            struct pal_stream_attributes *palStreamAttributes);
 
-    static PalStreamAttributes convertPalStreamAttributes(struct pal_stream_attributes *palStreamAttributes);
+    static std::vector<PalDevice> convertPalDeviceToAidl(struct pal_device *palDevice,
+                                                         int noOfDevices);
+    static PalMediaConfig convertPalMediaConfigToAidl(struct pal_media_config *palMediaConfig);
 
-    static PalDevice convertPalDevice(struct pal_device *palDevice);
+    static PalUsbDeviceAddress convertPalUSBDeviceAddressToAidl(
+            struct pal_usb_device_address *palUSBAddress);
 
-    static ModifierKV convertModifierKV(struct modifier_kv *modifierKV);
+    static std::vector<ModifierKV> convertModifierKVToAidl(struct modifier_kv *modifierKV,
+                                                           int noOfModifiers);
 
-    static PalDrainType convertPalDrainType(pal_drain_type_t palDrainType);
+    static PalDrainType convertPalDrainTypeToAidl(pal_drain_type_t palDrainType);
 
-    static PalBufferConfig convertPalBufferConfig(struct pal_buffer_config *palBufferConfig);
+    static PalBufferConfig convertPalBufferConfigToAidl(struct pal_buffer_config *palBufferConfig);
 
-    static PalBuffer convertPalBuffer(struct pal_buffer *palBuffer);
+    static PalBuffer convertPalBufferToAidl(struct pal_buffer *palBuffer);
 
-    static PalParamPayload convertPalParamPayload(pal_param_payload *palParamPayload);
+    static PalParamPayload convertPalParamPayloadToAidl(pal_param_payload *palParamPayload);
 
-    static PalAudioEffect convertPalAudioEffect(pal_audio_effect_t effect);
+    static PalAudioEffect convertPalAudioEffectToAidl(pal_audio_effect_t effect);
 
-    /*TODO Keeping both Defs of Mmap for now, will clear it later */
-    static PalMmapBuffer convertPalMmapBuffer(struct pal_mmap_buffer * palMmapBuffer);
+    static PalMmapBuffer convertPalMmapBufferToAidl(struct pal_mmap_buffer *palMmapBuffer);
 
-    static PalMmapPosition convertPalMmapPosition(struct pal_mmap_position * palMmapPosition);
+    static PalMmapPosition convertPalMmapPositionToAidl(struct pal_mmap_position *palMmapPosition);
 
-    static PalVolumeData convertPalVolData(pal_volume_data *palVolData);
+    static PalVolumeData convertPalVolDataToAidl(pal_volume_data *palVolData);
+
+    static PalSessionTime convertPalSessionTimeToAidl(struct pal_session_time *palSessTime);
 
     static std::vector<uint8_t> convertRawPalParamPayloadToVector(void *payload, size_t size);
-
-    static void convertPalSessionTimeToAidl(struct pal_session_time* palSessTime, PalSessionTime* aildSessTime);
-
-    static void convertMmapBufferInfoToAidl(struct pal_mmap_buffer* palMmapBuffer, PalMmapBuffer* aidlMmapBuffer);
-
-    static void convertMmapPositionInfoToAidl(struct pal_mmap_position *palMmapPosition,
-                                              PalMmapPosition* aidlMmapPosition);
 };
 }

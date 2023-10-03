@@ -6,14 +6,14 @@
 #pragma once
 
 #include <PalDefs.h>
-#include <log/log.h>
-#include <utils/Thread.h>
-#include <fmq/AidlMessageQueue.h>
-#include <fmq/EventFlag.h>
-#include <pal/PalAidlToLegacy.h>
-#include <pal/PalLegacyToAidl.h>
 #include <aidl/vendor/qti/hardware/pal/BnPALCallback.h>
 #include <aidl/vendor/qti/hardware/pal/PalMessageQueueFlagBits.h>
+#include <fmq/AidlMessageQueue.h>
+#include <fmq/EventFlag.h>
+#include <log/log.h>
+#include <pal/PalAidlToLegacy.h>
+#include <pal/PalLegacyToAidl.h>
+#include <utils/Thread.h>
 
 using ::android::AidlMessageQueue;
 using ::aidl::android::hardware::common::fmq::SynchronizedReadWrite;
@@ -24,52 +24,44 @@ using android::sp;
 namespace aidl::vendor::qti::hardware::pal {
 
 class PalCallback : public BnPALCallback {
-public:
+  public:
     typedef AidlMessageQueue<int8_t, SynchronizedReadWrite> DataMQ;
     typedef AidlMessageQueue<PalReadWriteDoneCommand, SynchronizedReadWrite> CommandMQ;
-    ::ndk::ScopedAStatus event_callback(int64_t in_streamHandle,
-        int32_t in_event_id,
-        int32_t in_event_data_size,
-        const std::vector<uint8_t>& in_event_data,
-        int64_t in_cookie) override;
+    ::ndk::ScopedAStatus eventCallback(int64_t handle, int32_t eventId, int32_t eventDataSize,
+                                       const std::vector<uint8_t>& eventData,
+                                       int64_t cookie) override;
 
-    ::ndk::ScopedAStatus event_callback_rw_done(int64_t in_streamHandle,
-        int32_t in_event_id,
-        int32_t in_event_data_size,
-        const std::vector<::aidl::vendor::qti::hardware::pal::PalCallbackBuffer>& in_rw_done_payload,
-        int64_t in_cookie) override;
-    ::ndk::ScopedAStatus prepare_mq_for_transfer(int64_t in_streamHandle,
-        int64_t in_cookie,
-        PalCallbackReturnData* _aidl_return) override;
+    ::ndk::ScopedAStatus eventCallbackRWDone(
+            int64_t handle, int32_t eventId, int32_t eventDataSize,
+            const std::vector<::aidl::vendor::qti::hardware::pal::PalCallbackBuffer>&
+                    aidlRWDonePayload,
+            int64_t cookie) override;
+    ::ndk::ScopedAStatus prepareMQForTransfer(int64_t handle, int64_t cookie,
+                                              PalCallbackReturnData* aidlReturn) override;
 
-    PalCallback(pal_stream_callback callBack)
-    {
-        if (callBack)
-        {
-            cb = callBack;
+    PalCallback(pal_stream_callback callBack) {
+        if (callBack) {
+            mCallback = callBack;
         }
     }
-
+    void cleanupDataTransferThread();
     virtual ~PalCallback();
 
-protected:
-    pal_stream_callback cb;
+  protected:
+    pal_stream_callback mCallback;
     std::unique_ptr<DataMQ> mDataMQ = nullptr;
     std::unique_ptr<CommandMQ> mCommandMQ = nullptr;
     EventFlag* mEfGroup = nullptr;
     std::atomic<bool> mStopDataTransferThread = false;
     sp<Thread> mDataTransferThread = nullptr;
-    uint64_t mStreamCookie;
+    uint64_t mCookie;
 };
 
 class DataTransferThread : public Thread {
-   public:
+  public:
     DataTransferThread(std::atomic<bool>* stop, int64_t streamHandle,
-                pal_stream_callback clbkObject,
-                PalCallback::DataMQ* dataMQ,
-                PalCallback::CommandMQ* commandMQ,
-                EventFlag* efGroup,
-                uint64_t cookie)
+                       pal_stream_callback clbkObject, PalCallback::DataMQ* dataMQ,
+                       PalCallback::CommandMQ* commandMQ, EventFlag* efGroup, uint64_t cookie)
         : Thread(false),
           mStop(stop),
           mStreamHandle(streamHandle),
@@ -85,7 +77,7 @@ class DataTransferThread : public Thread {
     }
     virtual ~DataTransferThread() {}
 
-   private:
+  private:
     std::atomic<bool>* mStop;
     uint64_t mStreamHandle;
     pal_stream_callback mStreamCallback;

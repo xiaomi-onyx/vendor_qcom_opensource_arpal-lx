@@ -5,56 +5,72 @@
 
 #define LOG_TAG "PalIpc::LegacyToAidl::Converter"
 
+#include <PalDefs.h>
+#include <aidl/vendor/qti/hardware/pal/ModifierKV.h>
+#include <aidl/vendor/qti/hardware/pal/PalAudioEffect.h>
+#include <aidl/vendor/qti/hardware/pal/PalBuffer.h>
+#include <aidl/vendor/qti/hardware/pal/PalBufferConfig.h>
+#include <aidl/vendor/qti/hardware/pal/PalDevice.h>
+#include <aidl/vendor/qti/hardware/pal/PalDrainType.h>
+#include <aidl/vendor/qti/hardware/pal/PalMmapBuffer.h>
+#include <aidl/vendor/qti/hardware/pal/PalMmapPosition.h>
+#include <aidl/vendor/qti/hardware/pal/PalParamPayload.h>
+#include <aidl/vendor/qti/hardware/pal/PalStreamAttributes.h>
+#include <aidlcommonsupport/NativeHandle.h>
+#include <log/log.h>
 #include <pal/PalLegacyToAidl.h>
 #include <pal/Utils.h>
-#include <PalDefs.h>
-#include <log/log.h>
-#include <aidlcommonsupport/NativeHandle.h>
-#include <aidl/vendor/qti/hardware/pal/PalStreamAttributes.h>
-#include <aidl/vendor/qti/hardware/pal/PalDevice.h>
-#include <aidl/vendor/qti/hardware/pal/ModifierKV.h>
-#include <aidl/vendor/qti/hardware/pal/PalDrainType.h>
-#include <aidl/vendor/qti/hardware/pal/PalBufferConfig.h>
-#include <aidl/vendor/qti/hardware/pal/PalBuffer.h>
-#include <aidl/vendor/qti/hardware/pal/PalParamPayload.h>
-#include <aidl/vendor/qti/hardware/pal/PalMmapPosition.h>
-#include <aidl/vendor/qti/hardware/pal/PalMmapBuffer.h>
-#include <aidl/vendor/qti/hardware/pal/PalAudioEffect.h>
 
 namespace aidl::vendor::qti::hardware::pal {
 
-PalStreamAttributes LegacyToAidl::convertPalStreamAttributes(struct pal_stream_attributes *palStreamAttr)
-{
-    PalStreamAttributes aidlStreamAttr;
-    PalStreamInfo aidlStreamInfo;
-    pal_stream_info palStreamInfo;
-    PalMediaConfig aidlInMediaConfig;
-    PalMediaConfig aidlOutMediaConfig;
-    PalChannelInfo aidlInChannelInfo;
-    PalChannelInfo aidlOutChannelInfo;
+PalMediaConfig LegacyToAidl::convertPalMediaConfigToAidl(struct pal_media_config *palMediaConfig) {
+    PalMediaConfig aidlMediaConfig;
+    aidlMediaConfig.sampleRate = static_cast<int>(palMediaConfig->sample_rate);
+    aidlMediaConfig.bitwidth = palMediaConfig->bit_width;
+    aidlMediaConfig.chInfo.channels = palMediaConfig->ch_info.channels;
+    memcpy(aidlMediaConfig.chInfo.chMap.data(), palMediaConfig->ch_info.ch_map,
+           PAL_MAX_CHANNELS_SUPPORTED);
+    aidlMediaConfig.audioFormatId = static_cast<PalAudioFmt>(palMediaConfig->aud_fmt_id);
+    return std::move(aidlMediaConfig);
+}
 
+PalUsbDeviceAddress LegacyToAidl::convertPalUSBDeviceAddressToAidl(
+        struct pal_usb_device_address *palUSBAddress) {
+    PalUsbDeviceAddress aidlAddress;
+    aidlAddress.cardId = palUSBAddress->card_id;
+    aidlAddress.deviceNum = palUSBAddress->device_num;
+    return std::move(aidlAddress);
+}
+
+PalStreamAttributes LegacyToAidl::convertPalStreamAttributesToAidl(
+        struct pal_stream_attributes *palStreamAttr) {
     if (palStreamAttr == nullptr) {
         return {};
     }
 
-    aidlStreamAttr.type = static_cast<PalStreamType>(palStreamAttr->type);
-    uint16_t in_channels = palStreamAttr->in_media_config.ch_info.channels;
-    uint16_t out_channels = palStreamAttr->out_media_config.ch_info.channels;
+    PalStreamAttributes aidlStreamAttr;
+    PalStreamInfo aidlStreamInfo;
+    pal_stream_info palStreamInfo;
 
     aidlStreamAttr.type = static_cast<PalStreamType>(palStreamAttr->type);
 
-    ALOGD("%s: %d channels[in %d : out %d] format[in %d : out %d] flags %d",__func__,__LINE__,
-        in_channels, out_channels, palStreamAttr->in_media_config.aud_fmt_id,
-        palStreamAttr->out_media_config.aud_fmt_id, palStreamAttr->flags);
+    aidlStreamAttr.type = static_cast<PalStreamType>(palStreamAttr->type);
+
+    ALOGD("%s: %d channels[in %d : out %d] format[in %d : out %d] flags %d", __func__, __LINE__,
+          palStreamAttr->in_media_config.ch_info.channels,
+          palStreamAttr->out_media_config.ch_info.channels,
+          palStreamAttr->in_media_config.aud_fmt_id, palStreamAttr->out_media_config.aud_fmt_id,
+          palStreamAttr->flags);
+
     // AIDL Stream Info
     palStreamInfo = palStreamAttr->info.opt_stream_info;
     aidlStreamInfo.version = static_cast<long>(palStreamInfo.version);
     aidlStreamInfo.size = static_cast<long>(palStreamInfo.size);
-    aidlStreamInfo.duration_us = static_cast<long>(palStreamInfo.duration_us);
-    aidlStreamInfo.has_video = palStreamInfo.has_video;
-    aidlStreamInfo.is_streaming = palStreamInfo.is_streaming;
-    aidlStreamInfo.loopback_type = palStreamInfo.loopback_type;
-    aidlStreamInfo.haptics_type = palStreamInfo.haptics_type;
+    aidlStreamInfo.durationUs = static_cast<long>(palStreamInfo.duration_us);
+    aidlStreamInfo.hasVideo = palStreamInfo.has_video;
+    aidlStreamInfo.isStreaming = palStreamInfo.is_streaming;
+    aidlStreamInfo.loopbackType = palStreamInfo.loopback_type;
+    aidlStreamInfo.hapticsType = palStreamInfo.haptics_type;
     aidlStreamAttr.info = aidlStreamInfo;
 
     aidlStreamAttr.flags = static_cast<PalStreamFlag>(palStreamAttr->flags);
@@ -62,80 +78,62 @@ PalStreamAttributes LegacyToAidl::convertPalStreamAttributes(struct pal_stream_a
     aidlStreamAttr.direction = static_cast<PalStreamDirection>(palStreamAttr->direction);
 
     // InMediaConfig
-    aidlInMediaConfig.sample_rate = static_cast<int>(palStreamAttr->in_media_config.sample_rate);
-    aidlInMediaConfig.bit_width = static_cast<int>(palStreamAttr->in_media_config.bit_width);
-    aidlInChannelInfo.channels = palStreamAttr->in_media_config.ch_info.channels;
-    memcpy(aidlInChannelInfo.ch_map.data(), palStreamAttr->in_media_config.ch_info.ch_map, PAL_MAX_CHANNELS_SUPPORTED);
-    aidlInMediaConfig.aud_fmt_id = static_cast<PalAudioFmt>(palStreamAttr->in_media_config.aud_fmt_id);
-    aidlInMediaConfig.ch_info = aidlInChannelInfo;
-    aidlStreamAttr.in_media_config = aidlInMediaConfig;
+    aidlStreamAttr.inMediaConfig = convertPalMediaConfigToAidl(&(palStreamAttr->in_media_config));
 
-    //OutMediaConfig
-    aidlOutMediaConfig.sample_rate = static_cast<int>(palStreamAttr->out_media_config.sample_rate);
-    aidlOutMediaConfig.bit_width = static_cast<int>(palStreamAttr->out_media_config.bit_width);
-    aidlOutChannelInfo.channels = palStreamAttr->out_media_config.ch_info.channels;
-    memcpy(aidlOutChannelInfo.ch_map.data(), palStreamAttr->out_media_config.ch_info.ch_map, PAL_MAX_CHANNELS_SUPPORTED);
-    aidlOutMediaConfig.aud_fmt_id = static_cast<PalAudioFmt>(palStreamAttr->out_media_config.aud_fmt_id);
-    aidlOutMediaConfig.ch_info = aidlOutChannelInfo;
-    aidlStreamAttr.out_media_config = aidlOutMediaConfig;
+    // OutMediaConfig
+    aidlStreamAttr.outMediaConfig = convertPalMediaConfigToAidl(&(palStreamAttr->out_media_config));
 
     ALOGV("%s config %s", __func__, aidlStreamAttr.toString().c_str());
     return std::move(aidlStreamAttr);
 }
 
-PalDevice LegacyToAidl::convertPalDevice(struct pal_device *palDevice)
-{
-    PalDevice aidlPalDevice;
-    PalMediaConfig aidlMediaConfig;
-    PalChannelInfo aidlChannelInfo;
-    PalUsbDeviceAddress aidlAddress;
-
+std::vector<PalDevice> LegacyToAidl::convertPalDeviceToAidl(struct pal_device *palDevice,
+                                                            int noOfDevices) {
     if (palDevice == nullptr) {
         return {};
     }
 
-    aidlPalDevice.id = static_cast<PalDeviceId>(palDevice->id);
+    std::vector<PalDevice> aidlPalDevice;
+    aidlPalDevice.resize(noOfDevices);
 
-    // AIDL Media Config
-    aidlMediaConfig.sample_rate = static_cast<int>(palDevice->config.sample_rate);
-    aidlMediaConfig.bit_width = static_cast<int>(palDevice->config.bit_width);
-    aidlChannelInfo.channels = static_cast<char>(palDevice->config.ch_info.channels);
-    memcpy(aidlChannelInfo.ch_map.data(), palDevice->config.ch_info.ch_map, PAL_MAX_CHANNELS_SUPPORTED);
-    aidlMediaConfig.aud_fmt_id = static_cast<PalAudioFmt>(palDevice->config.aud_fmt_id);
-    aidlPalDevice.config = aidlMediaConfig;
+    for (auto i = 0; i < noOfDevices; i++) {
+        aidlPalDevice[i].id = static_cast<PalDeviceId>(palDevice[i].id);
 
-    // AIDL address
-    aidlAddress.card_id = palDevice->address.card_id;
-    aidlAddress.device_num = palDevice->address.device_num;
-    aidlPalDevice.address = aidlAddress;
+        // AIDL Media Config
+        aidlPalDevice[i].config = convertPalMediaConfigToAidl(&(palDevice[i].config));
 
-    aidlPalDevice.sndDevName.resize(DEVICE_NAME_MAX_SIZE);
-    memcpy(aidlPalDevice.sndDevName.data(), palDevice->sndDevName, DEVICE_NAME_MAX_SIZE);
+        // AIDL address
+        aidlPalDevice[i].address = convertPalUSBDeviceAddressToAidl(&(palDevice[i].address));
 
-    aidlPalDevice.custom_config.custom_key.resize(PAL_MAX_CUSTOM_KEY_SIZE);
-    memcpy(aidlPalDevice.custom_config.custom_key.data(), palDevice->custom_config.custom_key, PAL_MAX_CUSTOM_KEY_SIZE);
+        aidlPalDevice[i].sndDevName.resize(DEVICE_NAME_MAX_SIZE);
+        strlcpy(aidlPalDevice[i].sndDevName.data(), palDevice[i].sndDevName, DEVICE_NAME_MAX_SIZE);
 
-    ALOGV("%s config %s", __func__, aidlPalDevice.toString().c_str());
-    return aidlPalDevice;
+        aidlPalDevice[i].customConfig.customKey.resize(PAL_MAX_CUSTOM_KEY_SIZE);
+        strlcpy(aidlPalDevice[i].customConfig.customKey.data(),
+                palDevice[i].custom_config.custom_key, PAL_MAX_CUSTOM_KEY_SIZE);
+    }
+
+    return std::move(aidlPalDevice);
 }
 
-ModifierKV LegacyToAidl::convertModifierKV(struct modifier_kv *modifierKv)
-{
-    ModifierKV aidlKv;
-
+std::vector<ModifierKV> LegacyToAidl::convertModifierKVToAidl(struct modifier_kv *modifierKv,
+                                                              int noOfModifiers) {
     if (modifierKv == nullptr) {
         return {};
     }
 
-    aidlKv.key = modifierKv->key;
-    aidlKv.value = modifierKv->value;
+    std::vector<ModifierKV> aidlKvVec;
+    aidlKvVec.resize(noOfModifiers);
 
-    ALOGV("%s config %s", __func__, aidlKv.toString().c_str());
-    return aidlKv;
+    for (auto i = 0; i < noOfModifiers; i++) {
+        aidlKvVec[i].key = modifierKv[i].key;
+        aidlKvVec[i].value = modifierKv[i].value;
+    }
+
+    return std::move(aidlKvVec);
 }
 
-PalDrainType LegacyToAidl::convertPalDrainType(pal_drain_type_t palDrainType)
-{
+PalDrainType LegacyToAidl::convertPalDrainTypeToAidl(pal_drain_type_t palDrainType) {
     if (!palDrainType) {
         return {};
     }
@@ -143,23 +141,22 @@ PalDrainType LegacyToAidl::convertPalDrainType(pal_drain_type_t palDrainType)
     return static_cast<PalDrainType>(palDrainType);
 }
 
-PalBufferConfig LegacyToAidl::convertPalBufferConfig(struct pal_buffer_config *palBufferConfig)
-{
+PalBufferConfig LegacyToAidl::convertPalBufferConfigToAidl(
+        struct pal_buffer_config *palBufferConfig) {
     PalBufferConfig aidlConfig;
 
     if (palBufferConfig == nullptr) {
         return {};
     }
 
-    aidlConfig.buf_count = static_cast<int>(palBufferConfig->buf_count);
-    aidlConfig.buf_size = static_cast<int>(palBufferConfig->buf_size);
-    aidlConfig.max_metadata_size = static_cast<int>(palBufferConfig->max_metadata_size);
+    aidlConfig.bufCount = static_cast<int>(palBufferConfig->buf_count);
+    aidlConfig.bufSize = static_cast<int>(palBufferConfig->buf_size);
+    aidlConfig.maxMetadataSize = static_cast<int>(palBufferConfig->max_metadata_size);
 
     return std::move(aidlConfig);
 }
 
-PalParamPayload LegacyToAidl::convertPalParamPayload(pal_param_payload *palParamPayload)
-{
+PalParamPayload LegacyToAidl::convertPalParamPayloadToAidl(pal_param_payload *palParamPayload) {
     PalParamPayload aidlPayload;
 
     if (palParamPayload == nullptr) {
@@ -172,15 +169,14 @@ PalParamPayload LegacyToAidl::convertPalParamPayload(pal_param_payload *palParam
     return std::move(aidlPayload);
 }
 
-aidl::android::hardware::common::NativeHandle fdToNativeHandle(int fd, int intToCopy = -1)
-{
+aidl::android::hardware::common::NativeHandle fdToNativeHandle(int fd, int intToCopy = -1) {
     aidl::android::hardware::common::NativeHandle handle;
     handle.fds.emplace_back(dup(fd));
     if (intToCopy != -1) handle.ints.emplace_back(intToCopy);
     return std::move(handle);
 }
 
-PalBuffer LegacyToAidl::convertPalBuffer(struct pal_buffer *palBuffer) {
+PalBuffer LegacyToAidl::convertPalBufferToAidl(struct pal_buffer *palBuffer) {
     PalBuffer aidlBuffer;
     TimeSpec aidlTimeSpec;
 
@@ -190,9 +186,8 @@ PalBuffer LegacyToAidl::convertPalBuffer(struct pal_buffer *palBuffer) {
 
     aidlBuffer.size = static_cast<int>(palBuffer->size);
     aidlBuffer.offset = static_cast<int>(palBuffer->offset);
-    aidlBuffer.buffer.resize(palBuffer->size);
     aidlBuffer.flags = static_cast<int>(palBuffer->flags);
-    aidlBuffer.frame_index = static_cast<long>(palBuffer->frame_index);
+    aidlBuffer.frameIndex = static_cast<long>(palBuffer->frame_index);
 
     // AIDL Time Stamp
     if (palBuffer->ts) {
@@ -202,46 +197,35 @@ PalBuffer LegacyToAidl::convertPalBuffer(struct pal_buffer *palBuffer) {
     }
 
     if (palBuffer->size && palBuffer->buffer) {
+        aidlBuffer.buffer.resize(palBuffer->size);
         memcpy(aidlBuffer.buffer.data(), palBuffer->buffer, palBuffer->size);
     }
 
-    aidlBuffer.alloc_info.alloc_handle = fdToNativeHandle(palBuffer->alloc_info.alloc_handle, palBuffer->alloc_info.alloc_handle);
-    aidlBuffer.alloc_info.alloc_size = static_cast<int>(palBuffer->alloc_info.alloc_size);
-    aidlBuffer.alloc_info.offset = palBuffer->alloc_info.offset;
+    aidlBuffer.allocInfo.allocHandle = fdToNativeHandle(palBuffer->alloc_info.alloc_handle,
+                                                        palBuffer->alloc_info.alloc_handle);
+    aidlBuffer.allocInfo.allocSize = static_cast<int>(palBuffer->alloc_info.alloc_size);
+    aidlBuffer.allocInfo.offset = palBuffer->alloc_info.offset;
 
     return std::move(aidlBuffer);
 }
 
-void LegacyToAidl::convertPalSessionTimeToAidl(struct pal_session_time* palSessTime, PalSessionTime* aildSessTime) {
-    if (palSessTime) {
-        aildSessTime->session_time.valLsw = palSessTime->session_time.value_lsw;
-        aildSessTime->session_time.valMsw = palSessTime->session_time.value_msw;
-        aildSessTime->absolute_time.valLsw = palSessTime->absolute_time.value_lsw;
-        aildSessTime->absolute_time.valMsw = palSessTime->absolute_time.value_msw;
-        aildSessTime->timestamp.valLsw = palSessTime->timestamp.value_lsw;
-        aildSessTime->timestamp.valMsw = palSessTime->timestamp.value_msw;
+PalSessionTime LegacyToAidl::convertPalSessionTimeToAidl(struct pal_session_time *palSessTime) {
+    PalSessionTime aidlSessTime;
+
+    if (!palSessTime) {
+        return {};
     }
+    aidlSessTime.sessionTime.valLsw = palSessTime->session_time.value_lsw;
+    aidlSessTime.sessionTime.valMsw = palSessTime->session_time.value_msw;
+    aidlSessTime.absoluteTime.valLsw = palSessTime->absolute_time.value_lsw;
+    aidlSessTime.absoluteTime.valMsw = palSessTime->absolute_time.value_msw;
+    aidlSessTime.timestamp.valLsw = palSessTime->timestamp.value_lsw;
+    aidlSessTime.timestamp.valMsw = palSessTime->timestamp.value_msw;
+
+    return std::move(aidlSessTime);
 }
 
-void LegacyToAidl::convertMmapBufferInfoToAidl(struct pal_mmap_buffer* palMmapBuffer, PalMmapBuffer* aidlMmapBuffer) {
-    if (palMmapBuffer) {
-        aidlMmapBuffer->buffer = (uint64_t)palMmapBuffer->buffer;
-        aidlMmapBuffer->fd = palMmapBuffer->fd;
-        aidlMmapBuffer->buffer_size_frames = palMmapBuffer->buffer_size_frames;
-        aidlMmapBuffer->burst_size_frames = palMmapBuffer->burst_size_frames;
-        aidlMmapBuffer->flags = (PalMmapBufferFlags)palMmapBuffer->flags;
-    }
-}
-
-void LegacyToAidl::convertMmapPositionInfoToAidl(struct pal_mmap_position* palMmapPosition, PalMmapPosition* aidlMmapPosition) {
-    if (palMmapPosition) {
-        aidlMmapPosition->time_nanoseconds = palMmapPosition->time_nanoseconds;
-        aidlMmapPosition->position_frames = palMmapPosition->position_frames;
-    }
-}
-
-PalAudioEffect LegacyToAidl::convertPalAudioEffect(pal_audio_effect_t palAudioEffect)
-{
+PalAudioEffect LegacyToAidl::convertPalAudioEffectToAidl(pal_audio_effect_t palAudioEffect) {
     if (!palAudioEffect) {
         return {};
     }
@@ -249,8 +233,7 @@ PalAudioEffect LegacyToAidl::convertPalAudioEffect(pal_audio_effect_t palAudioEf
     return static_cast<PalAudioEffect>(palAudioEffect);
 }
 
-PalMmapBuffer LegacyToAidl::convertPalMmapBuffer(struct pal_mmap_buffer * palMmapBuffer)
-{
+PalMmapBuffer LegacyToAidl::convertPalMmapBufferToAidl(struct pal_mmap_buffer *palMmapBuffer) {
     PalMmapBuffer aidlBuffer;
 
     if (palMmapBuffer == nullptr) {
@@ -259,29 +242,28 @@ PalMmapBuffer LegacyToAidl::convertPalMmapBuffer(struct pal_mmap_buffer * palMma
 
     aidlBuffer.buffer = reinterpret_cast<long>(palMmapBuffer->buffer);
     aidlBuffer.fd = palMmapBuffer->fd;
-    aidlBuffer.buffer_size_frames = palMmapBuffer->buffer_size_frames;
-    aidlBuffer.burst_size_frames = palMmapBuffer->burst_size_frames;
+    aidlBuffer.bufferSizeFrames = palMmapBuffer->buffer_size_frames;
+    aidlBuffer.burstSizeFrames = palMmapBuffer->burst_size_frames;
     aidlBuffer.flags = static_cast<PalMmapBufferFlags>(palMmapBuffer->flags);
 
     return aidlBuffer;
 }
 
-PalMmapPosition LegacyToAidl::convertPalMmapPosition(struct pal_mmap_position * palMmapPosition)
-{
+PalMmapPosition LegacyToAidl::convertPalMmapPositionToAidl(
+        struct pal_mmap_position *palMmapPosition) {
     PalMmapPosition aidlPosition;
 
     if (palMmapPosition == nullptr) {
         return {};
     }
 
-    aidlPosition.time_nanoseconds = static_cast<long>(palMmapPosition->time_nanoseconds);
-    aidlPosition.position_frames = static_cast<int>(palMmapPosition->position_frames);
+    aidlPosition.timeNanoseconds = static_cast<long>(palMmapPosition->time_nanoseconds);
+    aidlPosition.positionFrames = static_cast<int>(palMmapPosition->position_frames);
 
     return aidlPosition;
 }
 
-PalVolumeData LegacyToAidl::convertPalVolData(pal_volume_data *palVolData)
-{
+PalVolumeData LegacyToAidl::convertPalVolDataToAidl(pal_volume_data *palVolData) {
     PalVolumeData aidlPalVolData;
 
     if (palVolData == nullptr) {
@@ -290,18 +272,17 @@ PalVolumeData LegacyToAidl::convertPalVolData(pal_volume_data *palVolData)
 
     aidlPalVolData.volPair.resize(palVolData->no_of_volpair);
     memcpy(aidlPalVolData.volPair.data(), palVolData->volume_pair,
-            sizeof(PalChannelVolKv) * palVolData->no_of_volpair);
+           sizeof(PalChannelVolKv) * palVolData->no_of_volpair);
 
     return std::move(aidlPalVolData);
 }
 
-std::vector<uint8_t> LegacyToAidl::convertRawPalParamPayloadToVector(void *payload, size_t size)
-{
+std::vector<uint8_t> LegacyToAidl::convertRawPalParamPayloadToVector(void *payload, size_t size) {
     if (payload == nullptr) {
         return {};
     }
 
-    std::vector<uint8_t> aidlPayload(size);
+    std::vector<uint8_t> aidlPayload(size, 0);
     memcpy(aidlPayload.data(), payload, size);
     return std::move(aidlPayload);
 }
