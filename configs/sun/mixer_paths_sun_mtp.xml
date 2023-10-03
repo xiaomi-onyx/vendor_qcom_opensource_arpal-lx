@@ -35,8 +35,6 @@
     <!-- These are the initial mixer settings -->
     <ctl name="WSA_AIF_VI Mixer WSA_SPKR_VI_1" value="0" />
     <ctl name="WSA_AIF_VI Mixer WSA_SPKR_VI_2" value="0" />
-    <ctl name="WSA_AIF_CPS Mixer WSA_SPKR_CPS_1" value="0" />
-    <ctl name="WSA_AIF_CPS Mixer WSA_SPKR_CPS_2" value="0" />
 
     <!-- Codec controls -->
     <!-- WSA controls -->
@@ -46,21 +44,12 @@
     <ctl name="WSA_RX1 INP0" value="ZERO" />
     <ctl name="WSA_AIF_VI Mixer WSA_SPKR_VI_1" value="0" />
     <ctl name="WSA_AIF_VI Mixer WSA_SPKR_VI_2" value="0" />
-    <ctl name="WSA SPKRRECV" value="0" />
-    <ctl name="WSA PBR Enable" value="0" />
-    <ctl name="Idle Detect" value="0" />
     <ctl name="SpkrLeft COMP Switch" value="0" />
     <ctl name="SpkrRight COMP Switch" value="0" />
     <ctl name="SpkrLeft VISENSE Switch" value="0" />
     <ctl name="SpkrRight VISENSE Switch" value="0" />
-    <ctl name="SpkrLeft CPS Switch" value="0" />
-    <ctl name="SpkrRight CPS Switch" value="0" />
     <ctl name="SpkrLeft SWR DAC_Port Switch" value="0" />
     <ctl name="SpkrRight SWR DAC_Port Switch" value="0" />
-    <ctl name="SpkrLeft PBR Switch" value="0" />
-    <ctl name="SpkrRight PBR Switch" value="0" />
-    <ctl name="SpkrLeft WSA MODE" value="0" />
-    <ctl name="SpkrRight WSA MODE" value="0" />
 
     <!-- RX Controls -->
     <ctl name="RX_MACRO RX0 MUX" value="ZERO" />
@@ -299,16 +288,10 @@
         <ctl name="WSA_COMP2 Switch" value="1" />
         <ctl name="SpkrLeft COMP Switch" value="1" />
         <ctl name="SpkrLeft VISENSE Switch" value="1" />
-        <ctl name="SpkrLeft CPS Switch" value="1" />
         <ctl name="SpkrLeft SWR DAC_Port Switch" value="1" />
         <ctl name="SpkrRight COMP Switch" value="1" />
         <ctl name="SpkrRight VISENSE Switch" value="1" />
-        <ctl name="SpkrRight CPS Switch" value="1" />
         <ctl name="SpkrRight SWR DAC_Port Switch" value="1" />
-        <ctl name="SpkrLeft PBR Switch" value="1" />
-        <ctl name="SpkrRight PBR Switch" value="1" />
-        <ctl name="WSA PBR Enable" value="1" />
-        <ctl name="Idle Detect" value="1" />
     </path>
 
     <path name="speaker-prot">
@@ -325,7 +308,6 @@
         <ctl name="WSA2 RX5 MUX" value="AIF1_PB" />
         <ctl name="WSA2_RX1 INP0" value="RX5" />
         <ctl name="WSA2_COMP2 Switch" value="1" />
-        <ctl name="Idle Detect" value="1" />
         <ctl name="Spkr2Right COMP Switch" value="1" />
         <ctl name="Spkr2Right VISENSE Switch" value="1" />
         <ctl name="Spkr2Right SWR DAC_Port Switch" value="1" />
@@ -348,11 +330,7 @@
         <ctl name="WSA_COMP1 Switch" value="1" />
         <ctl name="SpkrLeft COMP Switch" value="1" />
         <ctl name="SpkrLeft VISENSE Switch" value="1" />
-        <ctl name="SpkrLeft CPS Switch" value="1" />
         <ctl name="SpkrLeft SWR DAC_Port Switch" value="1" />
-        <ctl name="SpkrLeft PBR Switch" value="1" />
-        <ctl name="WSA PBR Enable" value="1" />
-        <ctl name="Idle Detect" value="1" />
     </path>
 
     <path name="speaker-mono-prot">
@@ -366,11 +344,7 @@
         <ctl name="WSA_COMP2 Switch" value="1" />
         <ctl name="SpkrRight COMP Switch" value="1" />
         <ctl name="SpkrRight VISENSE Switch" value="1" />
-        <ctl name="SpkrRight CPS Switch" value="1" />
         <ctl name="SpkrRight SWR DAC_Port Switch" value="1" />
-        <ctl name="SpkrRight PBR Switch" value="1" />
-        <ctl name="WSA PBR Enable" value="1" />
-        <ctl name="Idle Detect" value="1" />
     </path>
 
     <path name="speaker-mono-2-prot">
@@ -545,26 +519,20 @@
     </path>
 
     <path name="cps-feedback">
-        <ctl name="WSA_AIF_CPS Mixer WSA_SPKR_CPS_1" value="1" />
-        <ctl name="WSA_AIF_CPS Mixer WSA_SPKR_CPS_2" value="1" />
     </path>
 
     <path name="cps-feedback-mono-1">
-        <ctl name="WSA_AIF_CPS Mixer WSA_SPKR_CPS_1" value="1" />
     </path>
 
     <path name="cps-feedback-mono-2">
-        <ctl name="WSA_AIF_CPS Mixer WSA_SPKR_CPS_2" value="1" />
     </path>
 
     <path name="handset">
         <ctl name="WSA RX0 MUX" value="AIF1_PB" />
         <ctl name="WSA_RX0 INP0" value="RX0" />
         <ctl name="WSA_COMP1 Switch" value="1" />
-        <ctl name="Idle Detect" value="1" />
         <ctl name="SpkrLeft COMP Switch" value="1" />
         <ctl name="SpkrLeft VISENSE Switch" value="1" />
-        <ctl name="SpkrLeft CPS Switch" value="1" />
         <ctl name="SpkrLeft SWR DAC_Port Switch" value="1" />
         <ctl name="WSA_RX0 Digital Volume" value="70" />
     </path>
@@ -582,7 +550,6 @@
         <ctl name="WSA RX_MIX0 MUX" value="AIF_MIX1_PB" />
         <ctl name="WSA_RX0 MIX INP" value="RX_MIX0" />
         <ctl name="WSA_COMP1 Switch" value="1" />
-        <ctl name="Idle Detect" value="1" />
         <ctl name="SpkrLeft COMP Switch" value="1" />
         <ctl name="SpkrLeft VISENSE Switch" value="1" />
         <ctl name="SpkrLeft SWR DAC_Port Switch" value="1" />
