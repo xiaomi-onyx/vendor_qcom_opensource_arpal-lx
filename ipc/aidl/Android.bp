@@ -1,7 +1,7 @@
 aidl_interface {
     name: "vendor.qti.hardware.pal",
     srcs: ["vendor/qti/hardware/pal/*.aidl"],
-    vendor_available: true,
+    vendor: true,
     stability: "vintf",
     imports: [
         "android.hardware.common-V2",

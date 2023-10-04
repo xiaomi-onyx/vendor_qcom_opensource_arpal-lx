@@ -22,9 +22,7 @@
 
 package vendor.qti.hardware.pal;
 @VintfStability
-parcelable PalCallbackBufferInfo {
-  long frameIndex;
-  int sampleRate;
-  int bitwidth;
-  char channelCount;
+parcelable PalParamChargerState {
+  boolean online;
+  boolean concurrentBoostEnable;
 }

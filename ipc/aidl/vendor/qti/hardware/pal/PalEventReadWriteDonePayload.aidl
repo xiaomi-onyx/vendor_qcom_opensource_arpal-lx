@@ -21,7 +21,7 @@ parcelable PalEventReadWriteDonePayload {
     /**
      * < data buffer status as defined in ar_osal_error.h
      */
-    int md_status;
+    int mdStatus;
     /**
      * < meta-data status as defined in ar_osal_error.h
      */

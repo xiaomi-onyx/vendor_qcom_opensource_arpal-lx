@@ -28,6 +28,6 @@ parcelable PalBuffer {
   int offset;
   vendor.qti.hardware.pal.TimeSpec timeStamp;
   int flags;
-  vendor.qti.hardware.pal.PalExternAllocBuffInfo alloc_info;
-  long frame_index;
+  vendor.qti.hardware.pal.PalExternAllocBuffInfo allocInfo;
+  long frameIndex;
 }

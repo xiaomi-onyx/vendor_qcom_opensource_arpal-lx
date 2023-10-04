@@ -9,9 +9,9 @@ package vendor.qti.hardware.pal;
 parcelable PalStreamInfo {
     long version;
     long size;
-    long duration_us;
-    boolean has_video;
-    boolean is_streaming;
-    int loopback_type;
-    int haptics_type;
+    long durationUs;
+    boolean hasVideo;
+    boolean isStreaming;
+    int loopbackType;
+    int hapticsType;
 }

@@ -25,7 +25,7 @@ package vendor.qti.hardware.pal;
 parcelable PalMmapBuffer {
   long buffer;
   int fd;
-  int buffer_size_frames;
-  int burst_size_frames;
+  int bufferSizeFrames;
+  int burstSizeFrames;
   vendor.qti.hardware.pal.PalMmapBufferFlags flags;
 }

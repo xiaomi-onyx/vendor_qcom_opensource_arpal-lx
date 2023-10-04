@@ -27,5 +27,5 @@ parcelable PalDevice {
   vendor.qti.hardware.pal.PalMediaConfig config;
   vendor.qti.hardware.pal.PalUsbDeviceAddress address;
   String sndDevName;
-  vendor.qti.hardware.pal.PalDeviceCustomConfig custom_config;
+  vendor.qti.hardware.pal.PalDeviceCustomConfig customConfig;
 }

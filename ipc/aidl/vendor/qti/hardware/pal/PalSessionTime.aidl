@@ -13,11 +13,11 @@ import vendor.qti.hardware.pal.PalTimeus;
  */
 @VintfStability
 parcelable PalSessionTime {
-    PalTimeus session_time;
+    PalTimeus sessionTime;
     /**
      * Value of the current session time in microseconds
      */
-    PalTimeus absolute_time;
+    PalTimeus absoluteTime;
     /**
      * Value of the absolute time in microseconds
      */

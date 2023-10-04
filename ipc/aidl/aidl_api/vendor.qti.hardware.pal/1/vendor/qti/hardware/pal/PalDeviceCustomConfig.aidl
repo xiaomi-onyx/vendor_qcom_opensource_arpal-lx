@@ -23,5 +23,5 @@
 package vendor.qti.hardware.pal;
 @VintfStability
 parcelable PalDeviceCustomConfig {
-  String custom_key;
+  String customKey;
 }

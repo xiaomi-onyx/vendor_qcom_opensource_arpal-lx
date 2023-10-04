@@ -23,8 +23,8 @@
 package vendor.qti.hardware.pal;
 @VintfStability
 parcelable PalCallbackBufferInfo {
-  long frame_index;
-  int sample_rate;
-  int bit_width;
-  char channel_count;
+  long frameIndex;
+  int sampleRate;
+  int bitwidth;
+  char channelCount;
 }

@@ -18,6 +18,6 @@ parcelable PalBuffer {
     int offset;
     TimeSpec timeStamp;
     int flags;
-    PalExternAllocBuffInfo alloc_info;
-    long frame_index;
+    PalExternAllocBuffInfo allocInfo;
+    long frameIndex;
 }

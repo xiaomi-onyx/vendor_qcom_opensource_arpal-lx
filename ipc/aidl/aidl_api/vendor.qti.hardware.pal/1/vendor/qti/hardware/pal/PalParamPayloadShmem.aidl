@@ -22,7 +22,7 @@
 
 package vendor.qti.hardware.pal;
 @VintfStability
-parcelable Pal_param_charger_state {
-  boolean is_charger_online;
-  boolean is_concurrent_boost_enable;
+parcelable PalParamPayloadShmem {
+  long payloadSize;
+  ParcelFileDescriptor fd;
 }

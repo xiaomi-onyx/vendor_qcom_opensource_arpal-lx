@@ -7,7 +7,7 @@ package vendor.qti.hardware.pal;
 
 @VintfStability
 parcelable PalExternAllocBuffInfo {
-    android.hardware.common.NativeHandle alloc_handle;
-    int alloc_size;
+    android.hardware.common.NativeHandle allocHandle;
+    int allocSize;
     int offset;
 }

@@ -23,7 +23,7 @@
 package vendor.qti.hardware.pal;
 @VintfStability
 parcelable PalBufferConfig {
-  int buf_count;
-  int buf_size;
-  int max_metadata_size;
+  int bufCount;
+  int bufSize;
+  int maxMetadataSize;
 }

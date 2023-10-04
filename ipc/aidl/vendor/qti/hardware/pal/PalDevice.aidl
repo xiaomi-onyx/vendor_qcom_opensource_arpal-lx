@@ -16,5 +16,5 @@ parcelable PalDevice {
     PalMediaConfig config;
     PalUsbDeviceAddress address;
     String sndDevName;
-    PalDeviceCustomConfig custom_config;
+    PalDeviceCustomConfig customConfig;
 }
