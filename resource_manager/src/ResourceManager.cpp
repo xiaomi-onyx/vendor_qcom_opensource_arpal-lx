@@ -5484,6 +5484,7 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
     std::vector<pal_stream_type_t> st_streams;
     bool do_st_stream_switch = false;
     bool use_lpi_temp = use_lpi_;
+    bool st_stream_conc_en = true;
 
     mActiveStreamMutex.lock();
     PAL_DBG(LOG_TAG, "Enter, stream type %d, direction %d, active %d", type, dir, active);
@@ -5499,7 +5500,6 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
     st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
 
     for (pal_stream_type_t st_stream_type : st_streams) {
-        bool st_stream_conc_en = true;
         bool st_stream_tx_conc = false;
         bool st_stream_rx_conc = false;
 
@@ -5535,6 +5535,14 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
                 }
             }
         }
+    }
+
+    /*
+     * The usecases using ST framework register the onResourcesAvailable callback.
+     * Notify the framework upon concurrency is inactive.
+     */
+    if (onResourceAvailCb && !st_stream_conc_en && !active) {
+        onResourceAvailCb(onResourceAvailCookie);
     }
 
     /* Reset enable counts to 0 if they are negative */
@@ -11182,6 +11190,22 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
             if (status) {
                 PAL_ERR(LOG_TAG, "set Parameter %d failed", param_id);
                 goto exit;
+            }
+        }
+        break;
+        case PAL_PARAM_ID_ST_RESOURCES_AVAILABLE:
+        {
+            pal_param_resources_available_t *resources_avail =
+                (pal_param_resources_available_t *)param_payload;
+            if (resources_avail) {
+                onResourceAvailCb =
+                    (SoundTriggerOnResourceAvailableCallback)resources_avail->callback;
+                onResourceAvailCookie = resources_avail->cookie;
+                PAL_VERBOSE(LOG_TAG, "setParameter onResourceAvailCb %pk"
+                    " onResourceAvailCookie %pk", onResourceAvailCb, onResourceAvailCookie);
+            } else {
+                PAL_ERR(LOG_TAG, "Invalid ST resource payload");
+                status = -EINVAL;
             }
         }
         break;

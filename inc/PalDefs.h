@@ -1013,6 +1013,7 @@ typedef enum {
     PAL_PARAM_ID_TIMESTRETCH_PARAMS = 72,
     PAL_PARAM_ID_LATENCY_MODE = 73,
     PAL_PARAM_ID_ST_CAPTURE_INFO = 74,
+    PAL_PARAM_ID_ST_RESOURCES_AVAILABLE = 75,
 } pal_param_id_type_t;
 
 /** HDMI/DP */
@@ -1136,6 +1137,14 @@ typedef struct pal_param_st_capture_info {
     int                   capture_handle;
     pal_stream_handle_t   *pal_handle;
 } pal_param_st_capture_info_t;
+
+/* Payload For ID: PAL_PARAM_ID_RESOURCES_AVAILABLE
+ * Description   : capture callback and cookie in resource_manager
+ */
+typedef struct pal_param_resources_available {
+    void*             callback;
+    uint64_t          cookie;
+} pal_param_resources_available_t;
 
 /*
  * Used to identify the swapping type

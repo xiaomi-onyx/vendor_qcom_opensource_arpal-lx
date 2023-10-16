@@ -389,6 +389,8 @@ enum NTStreamTypes_t : uint32_t {
     NT_PATH_DECODE
 };
 
+typedef void (*SoundTriggerOnResourceAvailableCallback)(uint64_t cookie);
+
 typedef void (*session_callback)(uint64_t hdl, uint32_t event_id, void *event_data,
                 uint32_t event_size);
 bool isPalPCMFormat(uint32_t fmt_id);
@@ -503,6 +505,8 @@ private:
     void onVUIStreamRegistered();
     void onVUIStreamDeregistered();
     bool checkDeviceSwitchForHaptics(struct pal_device *inDevAttr, struct pal_device *curDevAttr);
+    SoundTriggerOnResourceAvailableCallback onResourceAvailCb = NULL;
+    uint64_t onResourceAvailCookie;
 protected:
     std::list <Stream*> mActiveStreams;
     std::list <StreamPCM*> active_streams_ll;
