@@ -13,7 +13,8 @@ LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/inc
 
 LOCAL_SRC_FILES     := \
     src/PalLegacyToAidl.cpp \
-    src/PalAidlToLegacy.cpp
+    src/PalAidlToLegacy.cpp \
+    src/SharedMemoryWrapper.cpp
 
 LOCAL_STATIC_LIBRARIES := libaidlcommonsupport
 

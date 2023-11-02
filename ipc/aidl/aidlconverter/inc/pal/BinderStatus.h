@@ -5,12 +5,12 @@
 
 #pragma once
 
-#include <aidl/vendor/qti/hardware/pal/Status.h>
+#include <PalDefs.h>
 #include <aidl/vendor/qti/hardware/pal/PalCallbackBuffer.h>
+#include <aidl/vendor/qti/hardware/pal/Status.h>
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
 #include <log/log.h>
-#include <PalDefs.h>
 
 using aidl::vendor::qti::hardware::pal::Status;
 using aidl::vendor::qti::hardware::pal::PalCallbackBuffer;
@@ -106,7 +106,7 @@ static int statusTFromExceptionCode(Status exceptionCode) {
 /**
 * @brief status_tToBinderResult converts legacy status_t codes to ScopedAStatus.
 * The known errors are mapped from binder_status.h and directly propagated,
-* rest of errors used by AGM are converted using ServiceSpecificException.
+* rest of errors used by PAL are converted using ServiceSpecificException.
 * @param errcode linux based error code.
 * @return returns ScopedAStatus based on error code.
 */
@@ -123,15 +123,15 @@ inline ::ndk::ScopedAStatus status_tToBinderResult(int errcode) {
 /**
 * @brief statusTFromBinderStatus converts ScopedAStatus to legacy status_t codes
 * The known errors are mapped from binder_status.h and directly propagated,
-* rest of errors used by AGM are converted using ServiceSpecificException.
+* rest of errors used by PAL are converted using ServiceSpecificException.
 * converts ScopedAStatus Exception code into error using the
 * helper method statusTFromExceptionCode
 * @param status  ScopedAStatus code
 * @param caller to print caller function, helpful during debugging.
 * @return returns converted status_t code.
 */
-static inline int statusTFromBinderStatus(const ::ndk::ScopedAStatus &status,
-                                          const std::string &caller = "") {
+static inline int statusTFromBinderStatus(const ::ndk::ScopedAStatus& status,
+                                          const std::string& caller = "") {
     if (status.isOk()) {
         return ::android::OK;
     } else if (status.getServiceSpecificError()) {
@@ -144,8 +144,7 @@ static inline int statusTFromBinderStatus(const ::ndk::ScopedAStatus &status,
 }
 
 static void checkAndUpdateMDStatus(pal_event_read_write_done_payload* rw_done_payload,
-                                   PalCallbackBuffer* rwDonePayload)
-{
+                                   PalCallbackBuffer* rwDonePayload) {
     switch (rw_done_payload->md_status) {
         case ENOTRECOVERABLE: {
             ALOGE("%s: Error, md cannot be parsed in buffer", __func__);
@@ -164,8 +163,8 @@ static void checkAndUpdateMDStatus(pal_event_read_write_done_payload* rw_done_pa
         }
         default: {
             if (rw_done_payload->md_status) {
-                ALOGE("%s: Error received during callback, md status = 0x%x",
-                       __func__, rw_done_payload->md_status);
+                ALOGE("%s: Error received during callback, md status = 0x%x", __func__,
+                      rw_done_payload->md_status);
                 rwDonePayload->status = rw_done_payload->md_status;
             }
             break;
