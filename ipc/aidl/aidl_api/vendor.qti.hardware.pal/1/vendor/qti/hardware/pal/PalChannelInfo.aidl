@@ -24,5 +24,5 @@ package vendor.qti.hardware.pal;
 @VintfStability
 parcelable PalChannelInfo {
   char channels;
-  byte[64] ch_map;
+  byte[64] chMap;
 }

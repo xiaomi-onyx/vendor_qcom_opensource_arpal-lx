@@ -23,7 +23,7 @@
 package vendor.qti.hardware.pal;
 @VintfStability
 interface IPALCallback {
-  void event_callback(in long streamHandle, in int event_id, in int event_data_size, in byte[] event_data, in long cookie);
-  oneway void event_callback_rw_done(in long streamHandle, in int event_id, in int event_data_size, in vendor.qti.hardware.pal.PalCallbackBuffer[] rw_done_payload, in long cookie);
-  vendor.qti.hardware.pal.PalCallbackReturnData prepare_mq_for_transfer(in long streamHandle, in long cookie);
+  void eventCallback(in long handle, in int eventId, in int eventDataSize, in byte[] eventData, in long cookie);
+  oneway void eventCallbackRWDone(in long handle, in int eventId, in int eventDataSize, in vendor.qti.hardware.pal.PalCallbackBuffer[] rwDonePayload, in long cookie);
+  vendor.qti.hardware.pal.PalCallbackReturnData prepareMQForTransfer(in long handle, in long cookie);
 }

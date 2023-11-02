@@ -21,11 +21,11 @@ parcelable PalMmapBuffer {
     /**
      * < fd for mmap memory buffer
      */
-    int buffer_size_frames;
+    int bufferSizeFrames;
     /**
      * < total buffer size in frames
      */
-    int burst_size_frames;
+    int burstSizeFrames;
     /**
      * < transfer size granularity in frames
      */

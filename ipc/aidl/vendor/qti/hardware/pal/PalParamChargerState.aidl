@@ -10,10 +10,10 @@ package vendor.qti.hardware.pal;
  *  Description   : Charger State
  */
 @VintfStability
-parcelable Pal_param_charger_state {
-    boolean is_charger_online;
+parcelable PalParamChargerState {
+    boolean online;
     /**
      * < status of charger
      */
-    boolean is_concurrent_boost_enable;
+    boolean concurrentBoostEnable;
 }

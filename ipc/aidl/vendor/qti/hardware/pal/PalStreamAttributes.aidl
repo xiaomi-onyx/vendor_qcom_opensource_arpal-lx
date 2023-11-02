@@ -20,6 +20,6 @@ parcelable PalStreamAttributes {
     PalStreamInfo info;
     PalStreamFlag flags;
     PalStreamDirection direction;
-    PalMediaConfig in_media_config;
-    PalMediaConfig out_media_config;
+    PalMediaConfig inMediaConfig;
+    PalMediaConfig outMediaConfig;
 }

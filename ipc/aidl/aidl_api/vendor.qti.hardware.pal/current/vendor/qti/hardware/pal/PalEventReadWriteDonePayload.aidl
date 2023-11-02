@@ -25,6 +25,6 @@ package vendor.qti.hardware.pal;
 parcelable PalEventReadWriteDonePayload {
   int tag;
   int status;
-  int md_status;
+  int mdStatus;
   vendor.qti.hardware.pal.PalBuffer buff;
 }

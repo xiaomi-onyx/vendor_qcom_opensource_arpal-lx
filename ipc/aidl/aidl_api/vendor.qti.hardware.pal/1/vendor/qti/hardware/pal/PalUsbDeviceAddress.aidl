@@ -23,6 +23,6 @@
 package vendor.qti.hardware.pal;
 @VintfStability
 parcelable PalUsbDeviceAddress {
-  int card_id;
-  int device_num;
+  int cardId;
+  int deviceNum;
 }

@@ -27,6 +27,6 @@ parcelable PalStreamAttributes {
   vendor.qti.hardware.pal.PalStreamInfo info;
   vendor.qti.hardware.pal.PalStreamFlag flags;
   vendor.qti.hardware.pal.PalStreamDirection direction;
-  vendor.qti.hardware.pal.PalMediaConfig in_media_config;
-  vendor.qti.hardware.pal.PalMediaConfig out_media_config;
+  vendor.qti.hardware.pal.PalMediaConfig inMediaConfig;
+  vendor.qti.hardware.pal.PalMediaConfig outMediaConfig;
 }

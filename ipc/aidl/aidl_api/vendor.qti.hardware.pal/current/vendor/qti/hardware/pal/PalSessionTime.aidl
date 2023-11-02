@@ -23,7 +23,7 @@
 package vendor.qti.hardware.pal;
 @VintfStability
 parcelable PalSessionTime {
-  vendor.qti.hardware.pal.PalTimeus session_time;
-  vendor.qti.hardware.pal.PalTimeus absolute_time;
+  vendor.qti.hardware.pal.PalTimeus sessionTime;
+  vendor.qti.hardware.pal.PalTimeus absoluteTime;
   vendor.qti.hardware.pal.PalTimeus timestamp;
 }

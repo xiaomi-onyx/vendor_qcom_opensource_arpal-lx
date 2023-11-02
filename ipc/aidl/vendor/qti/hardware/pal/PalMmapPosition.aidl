@@ -11,9 +11,9 @@ package vendor.qti.hardware.pal;
  */
 @VintfStability
 parcelable PalMmapPosition {
-    long time_nanoseconds;
+    long timeNanoseconds;
     /**
      * < timestamp in ns, CLOCK_MONOTONIC
      */
-    int position_frames;
+    int positionFrames;
 }

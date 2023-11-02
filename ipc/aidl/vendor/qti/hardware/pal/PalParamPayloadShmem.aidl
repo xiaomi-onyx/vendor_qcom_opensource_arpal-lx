@@ -5,7 +5,10 @@
 
 package vendor.qti.hardware.pal;
 
+import android.os.ParcelFileDescriptor;
+
 @VintfStability
-parcelable PalDeviceCustomConfig {
-    String customKey;
+parcelable PalParamPayloadShmem {
+    long payloadSize;
+    ParcelFileDescriptor fd;
 }

@@ -23,8 +23,8 @@
 package vendor.qti.hardware.pal;
 @VintfStability
 parcelable PalMediaConfig {
-  int sample_rate;
-  int bit_width;
-  vendor.qti.hardware.pal.PalChannelInfo ch_info;
-  vendor.qti.hardware.pal.PalAudioFmt aud_fmt_id;
+  int sampleRate;
+  int bitwidth;
+  vendor.qti.hardware.pal.PalChannelInfo chInfo;
+  vendor.qti.hardware.pal.PalAudioFmt audioFormatId;
 }
