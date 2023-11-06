@@ -37,6 +37,8 @@ void AidlToLegacy::convertPalStreamAttributes(const PalStreamAttributes &aidlCon
     palStreamAttributes->info.opt_stream_info.duration_us = aidlConfig.info.durationUs;
     palStreamAttributes->info.opt_stream_info.has_video = aidlConfig.info.hasVideo;
     palStreamAttributes->info.opt_stream_info.is_streaming = aidlConfig.info.isStreaming;
+    palStreamAttributes->info.opt_stream_info.loopback_type = aidlConfig.info.loopbackType;
+    palStreamAttributes->info.opt_stream_info.haptics_type = aidlConfig.info.hapticsType;
     palStreamAttributes->flags = (pal_stream_flags_t)aidlConfig.flags;
     palStreamAttributes->direction = (pal_stream_direction_t)aidlConfig.direction;
 
