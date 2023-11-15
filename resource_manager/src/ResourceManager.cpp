@@ -56,6 +56,7 @@
 #include "StreamSensorPCMData.h"
 #include "StreamCommonProxy.h"
 #include "StreamHaptics.h"
+#include "StreamSensorRenderer.h"
 #include "gsl_intf.h"
 #include "Headphone.h"
 #include "PayloadBuilder.h"
@@ -146,6 +147,7 @@
 #define MAX_SESSIONS_ULTRASOUND 1
 #define MAX_SESSIONS_VOICE_RECOGNITION 1
 #define MAX_SESSIONS_SPATIAL_AUDIO 1
+#define MAX_SESSIONS_SENSOR_PLAYBACK 1
 
 #define WAKE_LOCK_NAME "audio_pal_wl"
 #define WAKE_LOCK_PATH "/sys/power/wake_lock"
@@ -388,6 +390,7 @@ const std::map<uint32_t, uint32_t> streamPriorityLUT {
     {PAL_STREAM_SENSOR_PCM_DATA,    3},
     {PAL_STREAM_ULTRASOUND,         4},
     {PAL_STREAM_SPATIAL_AUDIO,      3},
+    {PAL_STREAM_SENSOR_PCM_RENDERER,4},
 };
 
 const std::map<std::string, sidetone_mode_t> sidetoneModetoId {
@@ -3112,6 +3115,22 @@ int32_t ResourceManager::getDeviceConfig(struct pal_device *deviceattr,
                     deviceattr->id,deviceattr->config.sample_rate,
                     deviceattr->config.bit_width);
             break;
+        case PAL_DEVICE_OUT_ULTRASOUND_DEDICATED:
+            /* copy all config from stream attributes for sensor renderer */
+            if (!sAttr) {
+                PAL_ERR(LOG_TAG, "Invalid parameter.");
+                return -EINVAL;
+            }
+            if (sAttr->type != PAL_STREAM_SENSOR_PCM_RENDERER)
+                goto exit;
+
+            deviceattr->config.ch_info = sAttr->out_media_config.ch_info;
+            deviceattr->config.bit_width = sAttr->out_media_config.bit_width;
+            deviceattr->config.aud_fmt_id = bitWidthToFormat.at(sAttr->out_media_config.bit_width);
+            PAL_DBG(LOG_TAG, "devcie %d sample rate %d bitwidth %d",
+                    deviceattr->id, deviceattr->config.sample_rate,
+                    deviceattr->config.bit_width);
+            break;
         default:
             //do nothing for rest of the devices
             break;
@@ -3223,6 +3242,10 @@ bool ResourceManager::isStreamSupported(struct pal_stream_attributes *attributes
         case PAL_STREAM_ULTRASOUND:
             cur_sessions = active_streams_ultrasound.size();
             max_sessions = MAX_SESSIONS_ULTRASOUND;
+            break;
+        case PAL_STREAM_SENSOR_PCM_RENDERER:
+            cur_sessions = active_streams_sensor_renderer.size();
+            max_sessions = MAX_SESSIONS_SENSOR_PLAYBACK;
             break;
         default:
             PAL_ERR(LOG_TAG, "Invalid stream type = %d", type);
@@ -3377,6 +3400,7 @@ bool ResourceManager::isStreamSupported(struct pal_stream_attributes *attributes
         case PAL_STREAM_ACD:
         case PAL_STREAM_ULTRASOUND:
         case PAL_STREAM_SENSOR_PCM_DATA:
+        case PAL_STREAM_SENSOR_PCM_RENDERER:
              result = true;
              break;
         case PAL_STREAM_HAPTICS:
@@ -3560,7 +3584,12 @@ int ResourceManager::registerStream(Stream *s)
             ret = registerstream(sAFS, active_streams_afs);
             break;
         }
-
+        case PAL_STREAM_SENSOR_PCM_RENDERER:
+        {
+            StreamSensorRenderer* sPCM = dynamic_cast<StreamSensorRenderer*>(s);
+            ret = registerstream(sPCM, active_streams_sensor_renderer);
+            break;
+        }
         default:
             ret = -EINVAL;
             PAL_ERR(LOG_TAG, "Invalid stream type = %d ret %d", type, ret);
@@ -3748,6 +3777,12 @@ int ResourceManager::deregisterStream(Stream *s)
         {
             StreamCommonProxy* sAFS = dynamic_cast<StreamCommonProxy*>(s);
             ret = deregisterstream(sAFS, active_streams_afs);
+            break;
+        }
+        case PAL_STREAM_SENSOR_PCM_RENDERER:
+        {
+            StreamSensorRenderer* sPCM = dynamic_cast<StreamSensorRenderer*>(s);
+            ret = deregisterstream(sPCM, active_streams_sensor_renderer);
             break;
         }
 
@@ -6068,6 +6103,7 @@ int ResourceManager::getActiveStream_l(std::vector<Stream*> &activestreams,
     getActiveStreams(d, activestreams, active_streams_ultrasound);
     getActiveStreams(d, activestreams, active_streams_sensor_pcm_data);
     getActiveStreams(d, activestreams, active_streams_voice_rec);
+    getActiveStreams(d, activestreams, active_streams_sensor_renderer);
 
     if (activestreams.empty()) {
         ret = -ENOENT;
@@ -6139,6 +6175,7 @@ int ResourceManager::getOrphanStream_l(std::vector<Stream*> &orphanstreams,
     getOrphanStreams(orphanstreams, retrystreams, active_streams_incall_music);
     getOrphanStreams(orphanstreams, retrystreams, active_streams_haptics);
     getOrphanStreams(orphanstreams, retrystreams, active_streams_ultrasound);
+    getOrphanStreams(orphanstreams, retrystreams, active_streams_sensor_renderer);
 
     if (orphanstreams.empty() && retrystreams.empty()) {
         ret = -ENOENT;
@@ -6545,7 +6582,8 @@ void ResourceManager::checkAndSetDutyCycleParam()
     // check if UPD is already active
     for (auto& str: mActiveStreams) {
         str->getStreamAttributes(&StrAttr);
-        if (StrAttr.type == PAL_STREAM_ULTRASOUND &&
+        if ((StrAttr.type == PAL_STREAM_ULTRASOUND ||
+             StrAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER) &&
             str->isActive()) {
             is_upd_active = true;
             // enable duty by default, this may change based on concurrency.
@@ -6662,9 +6700,9 @@ int ResourceManager::getSndDeviceName(int deviceId, char *device_name)
     if (isValidDevId(deviceId)) {
         strlcpy(device_name, sndDeviceNameLUT[deviceId].second.c_str(), DEVICE_NAME_MAX_SIZE);
         if (isVbatEnabled && (deviceId == PAL_DEVICE_OUT_SPEAKER ||
-                              deviceId == PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) &&
+                              deviceId == PAL_DEVICE_OUT_ULTRASOUND) &&
                                 !strstr(device_name, VBAT_BCL_SUFFIX)) {
-            if (deviceId == PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+            if (deviceId == PAL_DEVICE_OUT_ULTRASOUND) {
                 getBackendName(deviceId, backEndName);
                 if (!(strstr(backEndName.c_str(), "CODEC_DMA-LPAIF_WSA-RX")))
                     return 0;
@@ -6673,6 +6711,9 @@ int ResourceManager::getSndDeviceName(int deviceId, char *device_name)
         }
         if (isSpeakerProtectionEnabled && deviceId == PAL_DEVICE_OUT_SPEAKER)
             strlcat(device_name, SPKR_PROT_SUFFIX, DEVICE_NAME_MAX_SIZE);
+        if (deviceId == PAL_DEVICE_OUT_ULTRASOUND_DEDICATED &&
+             rm->IsDedicatedBEForUPDEnabled())
+            strlcat(device_name, "-ultrasound", DEVICE_NAME_MAX_SIZE);
     } else {
         strlcpy(device_name, "", DEVICE_NAME_MAX_SIZE);
         PAL_ERR(LOG_TAG, "Invalid device id %d", deviceId);
@@ -6926,6 +6967,7 @@ const std::vector<int> ResourceManager::allocateFrontEndIds(const struct pal_str
         case PAL_STREAM_RAW:
         case PAL_STREAM_SENSOR_PCM_DATA:
         case PAL_STREAM_VOICE_RECOGNITION:
+        case PAL_STREAM_SENSOR_PCM_RENDERER:
             switch (sAttr.direction) {
                 case PAL_AUDIO_INPUT:
                     if (lDirection == TX_HOSTLESS) {
@@ -7225,6 +7267,7 @@ void ResourceManager::freeFrontEndIds(const std::vector<int> frontend,
         case PAL_STREAM_SENSOR_PCM_DATA:
         case PAL_STREAM_RAW:
         case PAL_STREAM_VOICE_RECOGNITION:
+        case PAL_STREAM_SENSOR_PCM_RENDERER:
             switch (sAttr.direction) {
                 case PAL_AUDIO_INPUT:
                     if (lDirection == TX_HOSTLESS) {
@@ -7446,9 +7489,9 @@ bool ResourceManager::compareSharedBEStreamDevAttr(std::vector <std::tuple<Strea
                         newDevAttr->id = curDevAttr.id;
                         /*
                          * when switching incoming stream to current device, check if dev atrr differs, like:
-                         * UPD started on handset, but music is already active on speaker, UDP needs switch
-                         * to speaker, but speaker sample rate updated to 96KHz, so need to switch current
-                         * active streams to 96K to apply new dev attr
+                         * UPD stream starts with 96K on upd device , but music is already active on speaker,
+                         * UDP needs to align to speaker, to update speaker sample rate to 96KHz, so need to
+                         * switch current active streams on speaker to 96K to apply new dev attr
                          */
                         newDev = Device::getInstance(newDevAttr, rm);
                         if (!newDev) {
@@ -7612,6 +7655,7 @@ bool ResourceManager::isValidDeviceSwitchForStream(Stream *s, pal_device_id_t ne
 
     switch (sAttr.type) {
     case PAL_STREAM_ULTRASOUND:
+    case PAL_STREAM_SENSOR_PCM_RENDERER:
         switch (newDeviceId) {
         case PAL_DEVICE_OUT_HANDSET:
         case PAL_DEVICE_OUT_SPEAKER:

@@ -432,6 +432,7 @@ class StreamSensorPCMData;
 class StreamContextProxy;
 class StreamCommonProxy;
 class StreamHaptics;
+class StreamSensorRenderer;
 
 struct deviceIn {
     int deviceId;
@@ -530,6 +531,7 @@ protected:
     std::list <StreamSensorPCMData*> active_streams_sensor_pcm_data;
     std::list <StreamContextProxy*> active_streams_context_proxy;
     std::list <StreamCommonProxy*> active_streams_afs;
+    std::list <StreamSensorRenderer*> active_streams_sensor_renderer;
     std::vector <std::pair<std::shared_ptr<Device>, Stream*>> active_devices;
     std::vector <std::shared_ptr<Device>> plugin_devices_;
     std::vector <pal_device_id_t> avail_devices_;

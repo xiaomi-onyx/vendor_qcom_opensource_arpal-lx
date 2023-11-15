@@ -36,6 +36,7 @@
 #include <chrono>
 #include "ContextManager.h"
 #include <asps/asps_acm_api.h>
+#include <asps/asps_us_rendering_usecase_api.h>
 #include "apm_api.h"
 
 #define LOG_TAG "PAL: ContextManager"
@@ -74,15 +75,15 @@ int32_t ContextManager::process_register_request(uint32_t see_id, uint32_t useca
             goto exit;
         }
 
-        rc = uc->Open();
-        if (rc) {
-            PAL_ERR(LOG_TAG, "Error:%d, Failed to Open() usecase:0x%x for see_client:%d", rc, usecase_id, see_id);
-            goto exit;
-        }
-
         rc = uc->SetUseCaseData(size, payload);
         if (rc) {
             PAL_ERR(LOG_TAG, "Error:%d, Failed to Setusecase() usecase:0x%x for see_client:%d", rc, usecase_id, see_id);
+            goto exit;
+        }
+
+        rc = uc->Open();
+        if (rc) {
+            PAL_ERR(LOG_TAG, "Error:%d, Failed to Open() usecase:0x%x for see_client:%d", rc, usecase_id, see_id);
             goto exit;
         }
 
@@ -928,6 +929,9 @@ Usecase* UsecaseFactory::UsecaseCreate(int32_t usecase_id)
         case ASPS_USECASE_ID_UPD:
             ret_usecase = new UsecaseUPD(usecase_id);
             break;
+        case ASPS_USECASE_ID_ULTRASOUND_RENDERING:
+            ret_usecase = new UsecasePCMRenderer(usecase_id);
+            break;
         default:
             ret_usecase = NULL;
             PAL_ERR(LOG_TAG, "Error:%d Invalid usecaseid:%d", -EINVAL, usecase_id);
@@ -1475,6 +1479,113 @@ UsecaseUPD::~UsecaseUPD()
 }
 
 int32_t UsecaseUPD::GetAckDataOnSuccessfullStart(uint32_t * size, void * data)
+{
+    int32_t rc = 0;
+    uint32_t *data_ptr = (uint32_t *)data;
+    int32_t no_of_miid = 0;
+    std::map<int32_t, std::vector<uint32_t>> tag_miid_map;
+
+    PAL_VERBOSE(LOG_TAG, "Enter");
+
+    rc = GetModuleIIDs(this->tags, tag_miid_map);
+    if (rc) {
+        PAL_ERR(LOG_TAG, "Error:%d failed to get module iids", rc);
+        goto exit;
+    }
+
+    // grab all miids for all tags, in the order that tags exist in the UC vector
+    for (auto tag : tags) {
+        for (uint32_t miid : tag_miid_map[tag]) {
+            *data_ptr = miid;
+            ++data_ptr;
+            ++no_of_miid;
+        }
+    }
+    *size = (no_of_miid * sizeof(uint32_t));
+exit:
+    PAL_VERBOSE(LOG_TAG, "Exit %d", rc);
+    return rc;
+}
+
+UsecasePCMRenderer::UsecasePCMRenderer(uint32_t usecase_id) : Usecase(usecase_id)
+{
+    PAL_VERBOSE(LOG_TAG, "Enter usecase:0x%x", usecase_id);
+
+    this->stream_attributes->type = PAL_STREAM_SENSOR_PCM_RENDERER;
+    this->stream_attributes->direction = PAL_AUDIO_OUTPUT;
+
+    this->no_of_devices = 1;
+    this->pal_devices = (struct pal_device *) calloc(this->no_of_devices, sizeof(struct pal_device));
+
+    if (!this->pal_devices) {
+         PAL_ERR(LOG_TAG, "Error:%d Failed to allocate memory for pal_devices", -ENOMEM);
+         throw std::runtime_error("Failed to allocate memory for pal_devices");
+    }
+
+    this->tags.push_back(TAG_TONE_RENDERER_MODULE);
+
+    PAL_VERBOSE(LOG_TAG, "Exit");
+}
+
+UsecasePCMRenderer::~UsecasePCMRenderer()
+{
+    PAL_VERBOSE(LOG_TAG, "Enter usecase:0x%x", this->usecase_id);
+    //cleanup is done in baseclass
+    PAL_VERBOSE(LOG_TAG, "Exit");
+}
+
+int32_t UsecasePCMRenderer::SetUseCaseData(uint32_t size, void *data)
+{
+    int rc = 0;
+    asps_ultrasound_rendering_usecase_register_payload_t *us_renderer_reg = NULL;
+    uint8_t* channel_type = NULL;
+
+    PAL_VERBOSE(LOG_TAG, "Enter usecase:0x%x, size:%d", this->usecase_id, size);
+    if (size < sizeof(asps_ultrasound_rendering_usecase_register_payload_t) || !data) {
+        rc = -EINVAL;
+        PAL_ERR(LOG_TAG, "Error:%d Invalid size:%d or data:%p for usecase:0x%x", rc, size, data, this->usecase_id);
+        goto exit;
+    }
+
+    us_renderer_reg = (asps_ultrasound_rendering_usecase_register_payload_t *)data;
+    this->stream_attributes->out_media_config.sample_rate = us_renderer_reg->sampling_rate;
+    // currently only support up to 2 channels
+    if (us_renderer_reg->num_channels > 2) {
+        rc = -EINVAL;
+        PAL_ERR(LOG_TAG, "invalid num of channels: %d", us_renderer_reg->num_channels);
+        goto exit;
+    }
+    this->stream_attributes->out_media_config.ch_info.channels = us_renderer_reg->num_channels;
+    this->stream_attributes->out_media_config.bit_width = us_renderer_reg->bit_width;
+
+    if (us_renderer_reg->num_channels >
+         (size - sizeof(asps_ultrasound_rendering_usecase_register_payload_t))) {
+        rc = -EINVAL;
+        PAL_ERR(LOG_TAG, "num of channels: %d surpass payload size: %d",
+                          us_renderer_reg->num_channels, size);
+        goto exit;
+    }
+    channel_type = (uint8_t*)data + sizeof(asps_ultrasound_rendering_usecase_register_payload_t);
+    for (uint32_t i = 0; i++; i < us_renderer_reg->num_channels)
+        this->stream_attributes->out_media_config.ch_info.ch_map[i] = channel_type[i];
+
+    // set custom key to apply corresponding path
+    if (us_renderer_reg->num_channels == 1) {
+        if (channel_type[0] == 0x1)
+            strlcpy(this->pal_devices->custom_config.custom_key, "top-speaker",
+                sizeof(this->pal_devices->custom_config.custom_key));
+        else
+            strlcpy(this->pal_devices->custom_config.custom_key, "bottom-speaker",
+                sizeof(this->pal_devices->custom_config.custom_key));
+    } else {
+        strlcpy(this->pal_devices->custom_config.custom_key, "stereo-speaker",
+                sizeof(this->pal_devices->custom_config.custom_key));
+    }
+exit:
+    return rc;
+}
+
+int32_t UsecasePCMRenderer::GetAckDataOnSuccessfullStart(uint32_t * size, void * data)
 {
     int32_t rc = 0;
     uint32_t *data_ptr = (uint32_t *)data;

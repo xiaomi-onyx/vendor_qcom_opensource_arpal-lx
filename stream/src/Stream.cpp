@@ -45,6 +45,7 @@
 #include "StreamSensorPCMData.h"
 #include "StreamCommonProxy.h"
 #include "StreamHaptics.h"
+#include "StreamSensorRenderer.h"
 #include "Session.h"
 #include "SessionAlsaPcm.h"
 #include "ResourceManager.h"
@@ -122,14 +123,13 @@ Stream* Stream::create(struct pal_stream_attributes *sAttr, struct pal_device *d
         struct pal_device_info devinfo = {};
         palDevsAttr[i] = {};
 
-        if (sAttr->type == PAL_STREAM_ULTRASOUND) {
+        if (sAttr->type == PAL_STREAM_ULTRASOUND ||
+            sAttr->type == PAL_STREAM_SENSOR_PCM_RENDERER) {
             if (i == 0) { // first assign output device
                 if (rm->IsVirtualPortForUPDEnabled())
                     dAttr[i].id = PAL_DEVICE_OUT_ULTRASOUND;
-                else if (rm->IsDedicatedBEForUPDEnabled())
-                    dAttr[i].id = PAL_DEVICE_OUT_ULTRASOUND_DEDICATED;
                 else
-                    dAttr[i].id = PAL_DEVICE_OUT_HANDSET;
+                    dAttr[i].id = PAL_DEVICE_OUT_ULTRASOUND_DEDICATED;
             } else { // then assign input device
                 dAttr[i].id = PAL_DEVICE_IN_ULTRASOUND_MIC;
             }
@@ -286,6 +286,14 @@ stream_create:
                                                    noOfModifiers,
                                                    rm);
                 break;
+                case PAL_STREAM_SENSOR_PCM_RENDERER:
+                    stream = new StreamSensorRenderer(sAttr,
+                                                  palDevsAttr,
+                                                  noOfDevices,
+                                                  modifiers,
+                                                  noOfModifiers,
+                                                  rm);
+                    break;
                 default:
                     PAL_ERR(LOG_TAG, "unsupported stream type 0x%x", sAttr->type);
                     break;

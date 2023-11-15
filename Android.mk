@@ -83,6 +83,7 @@ LOCAL_SRC_FILES := \
     stream/src/StreamUltraSound.cpp \
     stream/src/StreamSensorPCMData.cpp\
     stream/src/StreamHaptics.cpp \
+    stream/src/StreamSensorRenderer.cpp \
     device/src/Headphone.cpp \
     device/src/USBAudio.cpp \
     device/src/Device.cpp \

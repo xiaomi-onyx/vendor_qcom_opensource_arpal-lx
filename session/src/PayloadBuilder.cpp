@@ -2536,6 +2536,13 @@ int PayloadBuilder::populateStreamKV(Stream* s, std::vector<std::pair<int,int>> 
         filled_selector_pairs.push_back(std::make_pair(VSID_SEL,
             vsidLUT.at(sattr->info.voice_call_info.VSID)));
         retrieveKVs(filled_selector_pairs ,sattr->type, all_streams, keyVectorTx);
+    } else if (sattr->type == PAL_STREAM_ULTRASOUND) {
+        filled_selector_pairs.push_back(std::make_pair(DIRECTION_SEL, "RX"));
+        retrieveKVs(filled_selector_pairs ,sattr->type, all_streams, keyVectorRx);
+
+        filled_selector_pairs.clear();
+        filled_selector_pairs.push_back(std::make_pair(DIRECTION_SEL, "TX"));
+        retrieveKVs(filled_selector_pairs ,sattr->type, all_streams, keyVectorTx);
     } else {
         PAL_DBG(LOG_TAG, "KVs not provided for stream type:%d", sattr->type);
     }
@@ -4787,4 +4794,57 @@ std::unique_ptr<uint8_t[]> PayloadBuilder::getPayloadEncoderBitrate(
     outputPayloadSize = sizeAPM + sizeParamBitrate;
 
     return std::move(payload);
+}
+
+void PayloadBuilder::USToneRendererNotifyPayload(uint8_t **payload, size_t *size,
+        struct pal_device *dAttr, uint32_t moduleId,
+        us_tone_renderer_ep_media_format_status_t event)
+{
+    size_t payloadSize, padBytes;
+    uint8_t* payloadInfo = NULL;
+    struct apm_module_param_data_t* header = NULL;
+    data_event_id_us_tone_renderer_media_format_change_t* fmt_payload = NULL;
+    uint8_t* pcmChannel = NULL;
+
+    payloadSize = sizeof(struct apm_module_param_data_t) +
+                sizeof(param_id_us_tone_renderer_ep_media_format_cfg_t) +
+                (sizeof(uint8_t) * dAttr->config.ch_info.channels);
+    padBytes = PAL_PADDING_8BYTE_ALIGN(payloadSize);
+
+    payloadInfo = (uint8_t*) calloc(1, payloadSize + padBytes);
+    if (payloadInfo == NULL) {
+        PAL_ERR(LOG_TAG, "payload malloc failed %s", strerror(errno));
+        return;
+    }
+
+    header = (struct apm_module_param_data_t*)(payloadInfo);
+    header->module_instance_id = moduleId;
+    header->param_id = PARAM_ID_US_TONE_RENDERER_EP_MEDIA_FORMAT_CFG;
+    header->error_code = 0x0;
+    header->param_size = payloadSize -  sizeof(struct apm_module_param_data_t);
+    pcmChannel = (uint8_t*)(payloadInfo + sizeof(struct apm_module_param_data_t) +
+                            sizeof(struct param_id_us_tone_renderer_ep_media_format_cfg_t));
+
+    PAL_VERBOSE(LOG_TAG, "header params IID:%x param_id:%x error_code:%d"
+                " param_size:%d", header->module_instance_id, header->param_id,
+                header->error_code, header->param_size);
+
+    fmt_payload = (param_id_us_tone_renderer_ep_media_format_cfg_t *)
+                            (payloadInfo + sizeof(struct apm_module_param_data_t));
+    fmt_payload->status = event;
+    fmt_payload->sampling_rate = dAttr->config.sample_rate;
+    fmt_payload->bit_width = dAttr->config.bit_width;
+    fmt_payload->num_channels = dAttr->config.ch_info.channels;
+
+    for (int i = 0; i < dAttr->config.ch_info.channels; ++i) {
+        pcmChannel[i] = dAttr->config.ch_info.ch_map[i];
+    }
+
+    *size = payloadSize + padBytes;
+    *payload = payloadInfo;
+
+    PAL_DBG(LOG_TAG, "event: %d sample_rate:%d bit_width:%d num_channels:%d Miid:%d",
+                      fmt_payload->status, fmt_payload->sampling_rate, fmt_payload->bit_width,
+                      fmt_payload->num_channels, header->module_instance_id);
+    PAL_DBG(LOG_TAG, "payload %pK size %zu", *payload, *size);
 }

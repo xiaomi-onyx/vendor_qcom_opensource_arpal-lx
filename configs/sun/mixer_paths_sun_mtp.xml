@@ -546,7 +546,7 @@
         <ctl name="TX_DEC2 Volume" value="105" />
     </path>
 
-    <path name="ultrasound-handset">
+    <path name="handset-ultrasound">
         <ctl name="WSA RX_MIX0 MUX" value="AIF_MIX1_PB" />
         <ctl name="WSA_RX0 MIX INP" value="RX_MIX0" />
         <ctl name="WSA_COMP1 Switch" value="1" />
@@ -554,6 +554,23 @@
         <ctl name="SpkrLeft VISENSE Switch" value="1" />
         <ctl name="SpkrLeft SWR DAC_Port Switch" value="1" />
         <ctl name="WSA_RX0 Digital Volume" value="50" />
+    </path>
+
+    <path name="speaker-mono-2-ultrasound">
+        <ctl name="WSA RX_MIX1 MUX" value="AIF_MIX1_PB" />
+        <ctl name="WSA_RX1 MIX INP" value="RX_MIX1" />
+        <ctl name="WSA_COMP2 Switch" value="1" />
+        <ctl name="Idle Detect" value="1" />
+        <ctl name="SpkrRight COMP Switch" value="1" />
+        <ctl name="SpkrRight VISENSE Switch" value="1" />
+        <ctl name="SpkrRight SWR DAC_Port Switch" value="1" />
+        <ctl name="WSA PBR Enable" value="1" />
+        <ctl name="WSA_RX1 Digital Volume" value="50" />
+    </path>
+
+    <path name="speaker-ultrasound">
+        <path name="handset-ultrasound" />
+        <path name="speaker-mono-2-ultrasound" />
     </path>
 
     <path name="ultrasound-handset-vbat">

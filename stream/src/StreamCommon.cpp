@@ -114,7 +114,8 @@ StreamCommon::StreamCommon(const struct pal_stream_attributes *sattr, struct pal
 
     PAL_VERBOSE(LOG_TAG, "Create new Devices with no_of_devices - %d", no_of_devices);
     /* update handset/speaker sample rate for UPD with shared backend */
-    if ((sattr->type == PAL_STREAM_ULTRASOUND) && !rm->IsDedicatedBEForUPDEnabled()) {
+    if ((sattr->type == PAL_STREAM_ULTRASOUND ||
+         sattr->type == PAL_STREAM_SENSOR_PCM_RENDERER) && !rm->IsDedicatedBEForUPDEnabled()) {
         struct pal_device devAttr = {};
         struct pal_device_info inDeviceInfo;
         pal_device_id_t upd_dev[] = {PAL_DEVICE_OUT_SPEAKER, PAL_DEVICE_OUT_HANDSET};
@@ -180,7 +181,8 @@ StreamCommon::~StreamCommon()
     }
 
     /* restore handset/speaker sample rate to default for UPD with shared backend */
-    if ((type == PAL_STREAM_ULTRASOUND) && !rm->IsDedicatedBEForUPDEnabled()) {
+    if ((type == PAL_STREAM_ULTRASOUND ||
+         type == PAL_STREAM_SENSOR_PCM_RENDERER) && !rm->IsDedicatedBEForUPDEnabled()) {
         std::shared_ptr<Device> dev = nullptr;
         struct pal_device devAttr = {};
         pal_device_id_t upd_dev[] = {PAL_DEVICE_OUT_SPEAKER, PAL_DEVICE_OUT_HANDSET};

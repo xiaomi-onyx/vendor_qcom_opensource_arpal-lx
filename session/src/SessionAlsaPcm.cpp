@@ -192,6 +192,9 @@ int SessionAlsaPcm::open(Stream * s)
                 PAL_DBG(LOG_TAG, "haptics type = %d",sAttr.info.opt_stream_info.haptics_type);
                 ldir = RX_HOSTLESS;
             }
+            if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER) {
+                ldir = RX_HOSTLESS;
+            }
             pcmDevIds = rm->allocateFrontEndIds(sAttr, ldir);
             if (pcmDevIds.size() == 0) {
                 PAL_ERR(LOG_TAG, "allocateFrontEndIds failed");
@@ -1838,11 +1841,33 @@ pcm_start:
                 }
             }
 
+            if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
+                dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+                status = notifyUPDToneRendererFmtChng(&dAttr,
+                            US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_START);
+                if (status) {
+                    PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
+                            "format change START. status = %d", status);
+                    goto exit;
+                }
+            }
+
             if (pcmRx) {
                 status = pcm_start(pcmRx);
                 if (status) {
                     status = errno;
                     PAL_ERR(LOG_TAG, "pcm_start rx failed %d", status);
+                } else {
+                    if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
+                        dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+                        status = notifyUPDToneRendererFmtChng(&dAttr,
+                                    US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_DONE);
+                        if (status) {
+                            PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
+                                    "format change START. status = %d", status);
+                            goto exit;
+                        }
+                    }
                 }
             }
             if (pcmTx) {
@@ -2270,6 +2295,15 @@ int SessionAlsaPcm::disconnectSessionDevice(Stream *streamHandle,
             txAifBackEndsToDisconnect);
     deviceToDisconnect->getDeviceAttributes(&dAttr);
 
+    if (streamType == PAL_STREAM_SENSOR_PCM_RENDERER) {
+        status = notifyUPDToneRendererFmtChng(&dAttr,
+                    US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_START);
+        if (status) {
+            PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
+                    "format change START. status = %d", status);
+        }
+    }
+
     if (!rxAifBackEndsToDisconnect.empty()) {
         int cnt = 0;
         if (streamType != PAL_STREAM_ULTRASOUND &&
@@ -2286,6 +2320,7 @@ int SessionAlsaPcm::disconnectSessionDevice(Stream *streamHandle,
                 /* TODO: Need to adjust the delay based on requirement */
                 usleep(20000);
             }
+
             status = SessionAlsaUtils::disconnectSessionDevice(streamHandle, streamType, rm,
                      dAttr, pcmDevTxIds, pcmDevRxIds, rxAifBackEndsToDisconnect);
         }
@@ -2394,6 +2429,15 @@ int SessionAlsaPcm::connectSessionDevice(Stream* streamHandle, pal_stream_type_t
                         cnt--;
                         break;
                     }
+                }
+            }
+        } else {
+            if (streamType == PAL_STREAM_SENSOR_PCM_RENDERER) {
+                status = notifyUPDToneRendererFmtChng(&dAttr,
+                            US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_DONE);
+                if (status) {
+                    PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
+                            "format change START. status = %d", status);
                 }
             }
         }
@@ -2818,6 +2862,12 @@ int SessionAlsaPcm::setParameters(Stream *streamHandle, int tagId, uint32_t para
             struct agm_tag_config* tagConfig = NULL;
             int tkv_size = 0;
 
+            status = streamHandle->getStreamAttributes(&sAttr);
+            if (0 != status) {
+                PAL_ERR(LOG_TAG, "getStreamAttributes Failed \n");
+                goto exit;
+            }
+
             tkv.push_back(std::make_pair(TAG_KEY_DUTY_CYCLE, *(int*)payload));
             tagConfig = (struct agm_tag_config*)malloc(sizeof(struct agm_tag_config) +
                     (tkv.size() * sizeof(agm_key_value)));
@@ -2835,7 +2885,10 @@ int SessionAlsaPcm::setParameters(Stream *streamHandle, int tagId, uint32_t para
             }
 
             // set UPD RX tag data
-            tagCntrlNameRx<<streamPcm<<pcmDevRxIds.at(0)<<setParamTagControl;
+            if (sAttr.type == PAL_STREAM_ULTRASOUND)
+                tagCntrlNameRx<<streamPcm<<pcmDevRxIds.at(0)<<setParamTagControl;
+            else // SENSOR_RENDERER
+                tagCntrlNameRx<<streamPcm<<pcmDevIds.at(0)<<setParamTagControl;
             ctl = mixer_get_ctl_by_name(mixer, tagCntrlNameRx.str().data());
             if (!ctl) {
                 PAL_ERR(LOG_TAG, "Invalid mixer control: %s\n", tagCntrlNameRx.str().data());
@@ -2849,6 +2902,10 @@ int SessionAlsaPcm::setParameters(Stream *streamHandle, int tagId, uint32_t para
             if (status != 0) {
                 PAL_ERR(LOG_TAG, "failed to set the RX duty cycle calibration %d", status);
             }
+
+            // TX duty cycle param is N/A for sensor renderer
+            if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER)
+                return 0;
 
             // set UPD TX tag data
             tagCntrlNameTx<<streamPcm<<pcmDevTxIds.at(0)<<setParamTagControl;
@@ -3920,3 +3977,39 @@ int SessionAlsaPcm::reconfigureModule(uint32_t tagID, const char* BE, struct ses
 exit:
     return status;
 }
+
+int SessionAlsaPcm::notifyUPDToneRendererFmtChng(struct pal_device *dAttr,
+        us_tone_renderer_ep_media_format_status_t event)
+{
+    std::string backEndName;
+    int status = 0;
+    int device = 0;
+    uint32_t miid = 0;
+    int tagId = 0;
+    uint8_t* paramData = NULL;
+    size_t paramSize = 0;
+
+    if (pcmDevIds.size() > 0)
+        device = pcmDevIds.at(0);
+
+    rm->getBackendName(dAttr->id, backEndName);
+
+    status = getMIID(backEndName.c_str(), TAG_TONE_RENDERER_MODULE, &miid);
+    if (status) {
+        PAL_ERR(LOG_TAG, "Failed to get tag info %x, status = %d",
+                tagId, status);
+        return status;
+    }
+
+    builder->USToneRendererNotifyPayload(&paramData, &paramSize, dAttr, miid, event);
+    if (paramSize) {
+        status = SessionAlsaUtils::setMixerParameter(mixer, device,
+                                                paramData, paramSize);
+        PAL_INFO(LOG_TAG, "mixer notify US tone renderer format change,"
+                    " status=%d", status);
+        return status;
+    }
+
+    return 0;
+}
+
