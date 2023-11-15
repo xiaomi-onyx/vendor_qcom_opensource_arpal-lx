@@ -111,6 +111,13 @@ Stream* Stream::create(struct pal_stream_attributes *sAttr, struct pal_device *d
     }
     if (sAttr->type == PAL_STREAM_VOICE_CALL_MUSIC)
         goto stream_create;
+
+    if (sAttr->type == PAL_STREAM_SENSOR_PCM_DATA) {
+        ar_mem_cpy(palDevsAttr, sizeof(struct pal_device),
+                   dAttr, sizeof(struct pal_device));
+        goto stream_create;
+    }
+
     for (int i = 0; i < noOfDevices; i++) {
         struct pal_device_info devinfo = {};
         palDevsAttr[i] = {};
@@ -2152,6 +2159,7 @@ void Stream::handleStreamException(struct pal_stream_attributes *attributes,
 std::shared_ptr<Device> Stream::GetPalDevice(Stream *streamHandle, pal_device_id_t dev_id)
 {
     std::shared_ptr<CaptureProfile> cap_prof = nullptr;
+    std::shared_ptr<CaptureProfile> common_cap_prof = nullptr;
     std::shared_ptr<Device> device = nullptr;
     StreamSoundTrigger *st_st = nullptr;
     StreamACD *st_acd = nullptr;
@@ -2181,20 +2189,24 @@ std::shared_ptr<Device> Stream::GetPalDevice(Stream *streamHandle, pal_device_id
         cap_prof = st_sns_pcm_data->GetCurrentCaptureProfile();
     }
 
-    if (!cap_prof && !rm->GetSoundTriggerCaptureProfile()) {
+    if (!cap_prof && !rm->GetSoundTriggerCaptureProfile() &&
+        !rm->GetTXMacroCaptureProfile()) {
         PAL_ERR(LOG_TAG, "Failed to get local and common cap_prof for stream: %d",
                 mStreamAttr->type);
         goto exit;
     }
 
-    if (rm->GetSoundTriggerCaptureProfile()) {
+    common_cap_prof = (dev_id == PAL_DEVICE_IN_ULTRASOUND_MIC) ?
+                       rm->GetTXMacroCaptureProfile(): rm->GetSoundTriggerCaptureProfile();
+    if (common_cap_prof) {
         /* Use the rm's common capture profile if local capture profile is not
          * available, or the common capture profile has the highest priority.
          */
-        if (!cap_prof || rm->GetSoundTriggerCaptureProfile()->ComparePriority(cap_prof) > 0) {
+        if (!cap_prof ||
+            common_cap_prof->ComparePriority(cap_prof) >= CAPTURE_PROFILE_PRIORITY_HIGH) {
             PAL_DBG(LOG_TAG, "common cap_prof %s has the highest priority.",
-                    rm->GetSoundTriggerCaptureProfile()->GetName().c_str());
-            cap_prof = rm->GetSoundTriggerCaptureProfile();
+                    common_cap_prof->GetName().c_str());
+            cap_prof = common_cap_prof;
         }
     }
 

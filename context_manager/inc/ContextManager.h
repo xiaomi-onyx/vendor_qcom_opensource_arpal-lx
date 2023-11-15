@@ -122,6 +122,7 @@ class UsecasePCMData : public Usecase
 private:
     std::vector<int32_t> tags;
     uint32_t pcm_data_type;
+    uint32_t pcm_data_buffering;
 public:
     UsecasePCMData(uint32_t usecase_id);
     ~UsecasePCMData();

@@ -636,6 +636,11 @@
         <path name="amic6" />
     </path>
 
+    <path name="ultrasound-dmic">
+        <path name="amic1" />
+        <path name="amic6" />
+    </path>
+
     <path name="headphones">
         <ctl name="RX_MACRO RX0 MUX" value="AIF1_PB" />
         <ctl name="RX_MACRO RX1 MUX" value="AIF1_PB" />
