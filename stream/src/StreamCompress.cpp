@@ -818,10 +818,6 @@ int32_t StreamCompress::setVolume(struct pal_volume_data *volume)
         PAL_VERBOSE(LOG_TAG, "Volume payload mask:%x vol:%f",
                (mVolumeData->volume_pair[i].channel_mask), (mVolumeData->volume_pair[i].vol));
     }
-    if (!forceSetParameters && mVolumeData->volume_pair[0].vol == 0.0f) {
-        //if the volume is 0, force settting parameters
-        forceSetParameters = true;
-    }
 
     if (a2dpMuted) {
         PAL_DBG(LOG_TAG, "a2dp muted, just cache volume update");
@@ -835,6 +831,11 @@ int32_t StreamCompress::setVolume(struct pal_volume_data *volume)
         bool isStreamAvail = (find(vol_set_param_info.streams_.begin(),
                     vol_set_param_info.streams_.end(), mStreamAttr->type) !=
                     vol_set_param_info.streams_.end());
+        if (!forceSetParameters && mVolumeData->volume_pair[0].vol == 0.0f) {
+            //if the volume is 0, force settting parameters as well
+            status = session->setConfig(this, CALIBRATION, TAG_STREAM_VOLUME);
+            forceSetParameters = true;
+        }
         if ((isStreamAvail && vol_set_param_info.isVolumeUsingSetParam) || forceSetParameters) {
             uint8_t *volPayload = new uint8_t[sizeof(pal_param_payload) + volSize]();
             pal_param_payload *pld = (pal_param_payload *)volPayload;
