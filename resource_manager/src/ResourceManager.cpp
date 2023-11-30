@@ -171,6 +171,8 @@ char vendor_config_path[VENDOR_CONFIG_PATH_MAX_LENGTH] = {0};
 
 const std::vector<int> gSignalsOfInterest = {
     DEBUGGER_SIGNAL,
+    SIGABRT,
+    SIGSEGV,
 };
 
 // default properties which will be updated based on platform configuration
