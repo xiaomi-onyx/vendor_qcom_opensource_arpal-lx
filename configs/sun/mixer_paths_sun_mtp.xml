@@ -360,6 +360,7 @@
    <path name="speaker-mono-2-vbat">
        <path name="speaker-mono-2" />
        <ctl name="WSA_RX INT1 VBAT WSA RX1 VBAT Enable" value="1" />
+       <ctl name="WSA_RX1 Digital Volume" value="80" />
    </path>
 
     <path name="speaker-mono-vbat-prot">
