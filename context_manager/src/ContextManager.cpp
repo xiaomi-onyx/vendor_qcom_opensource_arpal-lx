@@ -1566,7 +1566,7 @@ int32_t UsecasePCMRenderer::SetUseCaseData(uint32_t size, void *data)
         goto exit;
     }
     channel_type = (uint8_t*)data + sizeof(asps_ultrasound_rendering_usecase_register_payload_t);
-    for (uint32_t i = 0; i++; i < us_renderer_reg->num_channels)
+    for (uint32_t i = 0; i < us_renderer_reg->num_channels; i++)
         this->stream_attributes->out_media_config.ch_info.ch_map[i] = channel_type[i];
 
     // set custom key to apply corresponding path

@@ -3534,8 +3534,12 @@ int SessionAlsaPcm::getTagsWithModuleInfo(Stream *s, size_t *size __unused, uint
 
     }
 
-    status = SessionAlsaUtils::getTagsWithModuleInfo(mixer, DeviceId,
-                                  txAifBackEnds[0].second.data(), payload);
+    if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER)
+        status = SessionAlsaUtils::getTagsWithModuleInfo(mixer, DeviceId,
+                                      rxAifBackEnds[0].second.data(), payload);
+    else
+        status = SessionAlsaUtils::getTagsWithModuleInfo(mixer, DeviceId,
+                                      txAifBackEnds[0].second.data(), payload);
     if (0 != status)
         PAL_ERR(LOG_TAG, "get tags failed = %d", status);
 
