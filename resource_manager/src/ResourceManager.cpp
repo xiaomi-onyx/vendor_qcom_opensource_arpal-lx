@@ -3119,6 +3119,7 @@ int32_t ResourceManager::getDeviceConfig(struct pal_device *deviceattr,
             if (sAttr->type != PAL_STREAM_SENSOR_PCM_RENDERER)
                 goto exit;
 
+            deviceattr->config.sample_rate = sAttr->out_media_config.sample_rate;
             deviceattr->config.ch_info = sAttr->out_media_config.ch_info;
             deviceattr->config.bit_width = sAttr->out_media_config.bit_width;
             deviceattr->config.aud_fmt_id = bitWidthToFormat.at(sAttr->out_media_config.bit_width);
