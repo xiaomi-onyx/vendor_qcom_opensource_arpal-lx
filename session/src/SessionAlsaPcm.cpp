@@ -2202,7 +2202,8 @@ int SessionAlsaPcm::close(Stream * s)
             if ((sAttr.type == PAL_STREAM_HAPTICS &&
                  sAttr.info.opt_stream_info.haptics_type == PAL_STREAM_HAPTICS_TOUCH) ||
                 (sAttr.type == PAL_STREAM_LOOPBACK &&
-                 sAttr.info.opt_stream_info.loopback_type == PAL_STREAM_LOOPBACK_PLAYBACK_ONLY))
+                 sAttr.info.opt_stream_info.loopback_type == PAL_STREAM_LOOPBACK_PLAYBACK_ONLY) ||
+                (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER))
                 ldir = RX_HOSTLESS;
 
             rm->freeFrontEndIds(pcmDevIds, sAttr, ldir);
