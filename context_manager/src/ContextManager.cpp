@@ -1572,13 +1572,13 @@ int32_t UsecasePCMRenderer::SetUseCaseData(uint32_t size, void *data)
     // set custom key to apply corresponding path
     if (us_renderer_reg->num_channels == 1) {
         if (channel_type[0] == 0x1)
-            strlcpy(this->pal_devices->custom_config.custom_key, "top-speaker",
+            strlcpy(this->pal_devices->custom_config.custom_key, "top-spkr",
                 sizeof(this->pal_devices->custom_config.custom_key));
         else
-            strlcpy(this->pal_devices->custom_config.custom_key, "bottom-speaker",
+            strlcpy(this->pal_devices->custom_config.custom_key, "bottom-spkr",
                 sizeof(this->pal_devices->custom_config.custom_key));
     } else {
-        strlcpy(this->pal_devices->custom_config.custom_key, "stereo-speaker",
+        strlcpy(this->pal_devices->custom_config.custom_key, "stereo-spkr",
                 sizeof(this->pal_devices->custom_config.custom_key));
     }
 exit:
