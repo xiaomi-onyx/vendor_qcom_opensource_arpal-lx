@@ -1467,6 +1467,7 @@ set_mixer:
                 if (status) {
                     status = errno;
                     PAL_ERR(LOG_TAG, "pcm_start failed %d", status);
+                    goto exit;
                 }
             }
             break;
@@ -1884,6 +1885,7 @@ pcm_start:
                 if (status) {
                     status = errno;
                     PAL_ERR(LOG_TAG, "pcm_start tx failed %d", status);
+                    goto exit;
                 }
             }
            break;
