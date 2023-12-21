@@ -1713,6 +1713,65 @@ set_mixer:
                         streamData.sampleRate = codecConfig.sample_rate;
                         streamData.bitWidth   = AUDIO_BIT_WIDTH_DEFAULT_16;
                         streamData.numChannel = 0xFFFF;
+                    } else if (dAttr.id == PAL_DEVICE_OUT_USB_DEVICE || dAttr.id == PAL_DEVICE_OUT_USB_HEADSET) {
+                        streamData.sampleRate = (dAttr.config.sample_rate % SAMPLINGRATE_8K == 0 &&
+                                                     dAttr.config.sample_rate <= SAMPLINGRATE_48K) ?
+                                                     dAttr.config.sample_rate : SAMPLINGRATE_48K;
+                        streamData.bitWidth   = AUDIO_BIT_WIDTH_DEFAULT_16;
+                        streamData.numChannel = 0xFFFF;
+                    } else {
+                        streamData.sampleRate = dAttr.config.sample_rate;
+                        streamData.bitWidth   = AUDIO_BIT_WIDTH_DEFAULT_16;
+                        streamData.numChannel = 0xFFFF;
+                    }
+                    builder->payloadMFCConfig(&payload, &payloadSize, miid, &streamData);
+                    if (payloadSize && payload) {
+                        status = updateCustomPayload(payload, payloadSize);
+                        freeCustomPayload(&payload, &payloadSize);
+                        if (0 != status) {
+                            PAL_ERR(LOG_TAG,"updateCustomPayload Failed\n");
+                            status = 0;
+                            goto pcm_start;
+                        }
+                    }
+                }
+                status = SessionAlsaUtils::setMixerParameter(mixer, pcmDevIds.at(0),
+                                                             customPayload, customPayloadSize);
+                freeCustomPayload();
+                if (status != 0) {
+                    PAL_ERR(LOG_TAG, "setMixerParameter failed");
+                    status = 0;
+                    goto pcm_start;
+                }
+            }
+            if (sAttr.type == PAL_STREAM_VOIP_RX) {
+                    status = SessionAlsaUtils::getModuleInstanceId(mixer, pcmDevIds.at(0),
+                                               rxAifBackEnds[0].second.data(), DEVICE_MFC, &miid);
+                if (status != 0) {
+                    PAL_ERR(LOG_TAG,"getModuleInstanceId failed\n");
+                    status = 0;
+                    goto pcm_start;
+                }
+                PAL_INFO(LOG_TAG, "miid : %x id = %d\n", miid, pcmDevIds.at(0));
+                status = s->getAssociatedDevices(associatedDevices);
+                if (0 != status) {
+                    PAL_ERR(LOG_TAG,"getAssociatedDevices Failed\n");
+                    status = 0;
+                    goto pcm_start;
+                }
+                for (int i = 0; i < associatedDevices.size();i++) {
+                    status = associatedDevices[i]->getDeviceAttributes(&dAttr);
+                    if (0 != status) {
+                        PAL_ERR(LOG_TAG,"get Device Attributes Failed\n");
+                        status = 0;
+                        goto pcm_start;
+                    }
+                    if (dAttr.id == PAL_DEVICE_OUT_USB_DEVICE || dAttr.id == PAL_DEVICE_OUT_USB_HEADSET) {
+                        streamData.sampleRate = (dAttr.config.sample_rate % SAMPLINGRATE_8K == 0 &&
+                                                     dAttr.config.sample_rate <= SAMPLINGRATE_48K) ?
+                                                     dAttr.config.sample_rate : SAMPLINGRATE_48K;
+                        streamData.bitWidth   = AUDIO_BIT_WIDTH_DEFAULT_16;
+                        streamData.numChannel = 0xFFFF;
                     } else {
                         streamData.sampleRate = dAttr.config.sample_rate;
                         streamData.bitWidth   = AUDIO_BIT_WIDTH_DEFAULT_16;
