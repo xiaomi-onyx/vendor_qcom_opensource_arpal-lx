@@ -1,5 +1,4 @@
 ifneq ($(AUDIO_USE_STUB_HAL), true)
-ifeq ($(TARGET_USES_QCOM_MM_AUDIO), true)
 
 LOCAL_PATH := $(call my-dir)
 PAL_BASE_PATH := $(call my-dir)
@@ -220,5 +219,4 @@ include $(CLEAR_VARS)
 include $(PAL_BASE_PATH)/plugins/Android.mk
 include $(PAL_BASE_PATH)/ipc/aidl/Android.mk
 
-endif #TARGET_USES_QCOM_MM_AUDIO
 endif #AUDIO_USE_STUB_HAL
