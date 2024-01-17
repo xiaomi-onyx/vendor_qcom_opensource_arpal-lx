@@ -1566,19 +1566,19 @@ int32_t UsecasePCMRenderer::SetUseCaseData(uint32_t size, void *data)
         goto exit;
     }
     channel_type = (uint8_t*)data + sizeof(asps_ultrasound_rendering_usecase_register_payload_t);
-    for (uint32_t i = 0; i++; i < us_renderer_reg->num_channels)
+    for (uint32_t i = 0; i < us_renderer_reg->num_channels; i++)
         this->stream_attributes->out_media_config.ch_info.ch_map[i] = channel_type[i];
 
     // set custom key to apply corresponding path
     if (us_renderer_reg->num_channels == 1) {
         if (channel_type[0] == 0x1)
-            strlcpy(this->pal_devices->custom_config.custom_key, "top-speaker",
+            strlcpy(this->pal_devices->custom_config.custom_key, "top-spkr",
                 sizeof(this->pal_devices->custom_config.custom_key));
         else
-            strlcpy(this->pal_devices->custom_config.custom_key, "bottom-speaker",
+            strlcpy(this->pal_devices->custom_config.custom_key, "bottom-spkr",
                 sizeof(this->pal_devices->custom_config.custom_key));
     } else {
-        strlcpy(this->pal_devices->custom_config.custom_key, "stereo-speaker",
+        strlcpy(this->pal_devices->custom_config.custom_key, "stereo-spkr",
                 sizeof(this->pal_devices->custom_config.custom_key));
     }
 exit:

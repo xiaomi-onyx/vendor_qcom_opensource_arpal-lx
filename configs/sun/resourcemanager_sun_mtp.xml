@@ -43,6 +43,7 @@
         <param key="xpan_enabled" value ="true" />
         <param key="logging_level" value ="3" />
         <param key="context_manager_enable" value ="true" />
+        <!-- change PAL_DEVICE_OUT_ULTRASOUND_DEDICATED backend name when set it to true -->
         <param key="upd_dedicated_be" value ="false" />
         <param key="upd_duty_cycle_enable" value="false" />
         <param key="dual_mono" value ="false" />
@@ -1025,7 +1026,7 @@
         </out-device>
         <out-device>
             <id>PAL_DEVICE_OUT_ULTRASOUND_DEDICATED</id>
-            <back_end_name>CODEC_DMA-LPAIF_WSA-RX-1</back_end_name>
+            <back_end_name>CODEC_DMA-LPAIF_WSA-RX-0</back_end_name>
             <max_channels>2</max_channels>
             <channels>1</channels>
             <snd_device_name>handset</snd_device_name>
@@ -1605,6 +1606,10 @@
                 <name>QC_VOICE_UI</name>
                 <param vendor_uuid="68ab2d40-e860-11e3-95ef-0002a5d5c51b" />
                 <param merge_first_stage_sound_models="false" />
+                <!-- Property for extended detection payload, disabled by default -->
+                <!-- OEM can enable this by adding properties defined in SoundTriggerUtils.h-->
+                <!-- Example: param detection_property_list="0x10001,0x10002,0x10003,0x10004"-->
+                <param detection_property_list="" />
                 <!--For now total 3 engines are supported, if more engine instances are needed,-->
                 <!-- do update acdb and usecaseKvManager.xml files by adding more instances    -->
                 <param pdk_first_stage_max_engine_count="1"/>
