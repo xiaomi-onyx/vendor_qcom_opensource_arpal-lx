@@ -381,7 +381,7 @@ const std::map<uint32_t, uint32_t> streamPriorityLUT {
     {PAL_STREAM_VOICE_CALL,         1},
     {PAL_STREAM_LOOPBACK,           3},
     {PAL_STREAM_TRANSCODE,          3},
-    {PAL_STREAM_VOICE_UI,           3},
+    {PAL_STREAM_VOICE_UI,           4},
     {PAL_STREAM_PCM_OFFLOAD,        3},
     {PAL_STREAM_ULTRA_LOW_LATENCY,  3},
     {PAL_STREAM_PROXY,              3},
@@ -497,6 +497,7 @@ std::thread ResourceManager::workerThread;
 std::thread ResourceManager::mixerEventTread;
 bool ResourceManager::mixerClosed = false;
 int ResourceManager::mixerEventRegisterCount = 0;
+int ResourceManager::TxconcurrencyEnableCount = 0;
 int ResourceManager::concurrencyEnableCount = 0;
 int ResourceManager::concurrencyDisableCount = 0;
 int ResourceManager::ACDConcurrencyEnableCount = 0;
@@ -4795,7 +4796,6 @@ bool ResourceManager::CheckForForcedTransitToNonLPI() {
     return false;
 }
 
-
 std::shared_ptr<CaptureProfile> ResourceManager::GetACDCaptureProfileByPriority(
     StreamACD *s, std::shared_ptr<CaptureProfile> cap_prof_priority,
     std::string backend) {
@@ -4847,6 +4847,9 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetSVACaptureProfileByPriority(
         cap_prof = str->GetCurrentCaptureProfile();
         if (!cap_prof) {
             PAL_ERR(LOG_TAG, "Failed to get capture profile");
+            continue;
+        } else if ((cap_prof->GetDevId() == PAL_DEVICE_IN_HANDSET_MIC) ||
+            (cap_prof->GetDevId() == PAL_DEVICE_IN_WIRED_HEADSET)) {
             continue;
         } else if (cap_prof->GetBackend().compare(backend) != 0) {
             continue;
@@ -5620,6 +5623,12 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
         if (!st_stream_conc_en) {
             HandleStreamPauseResume(st_stream_type, active);
             continue;
+        }
+        if (st_stream_tx_conc) {
+            if (active)
+                TxconcurrencyEnableCount++;
+            else if (TxconcurrencyEnableCount > 0)
+                TxconcurrencyEnableCount--;
         }
         if (st_stream_conc_en && (st_stream_tx_conc || st_stream_rx_conc)) {
             if (!IsLPISupported(st_stream_type) ||
