@@ -28,7 +28,8 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -1037,6 +1038,7 @@ int32_t pal_stream_set_device(pal_stream_handle_t *stream_handle,
         goto exit;
     }
 
+    s->lockStreamMutex();
     s->getAssociatedDevices(aDevices);
     s->getPalDevices(palDevices);
     if (!aDevices.empty() && !palDevices.empty()) {
@@ -1102,9 +1104,11 @@ int32_t pal_stream_set_device(pal_stream_handle_t *stream_handle,
                              (curPalDevices == newDevices)) {
             status = 0;
             PAL_DBG(LOG_TAG, "devices are same, no need to switch");
+            s->unlockStreamMutex();
             goto exit;
         }
     }
+    s->unlockStreamMutex();
 
     pDevices = (struct pal_device *) calloc(no_of_devices, sizeof(struct pal_device));
 
