@@ -5391,6 +5391,8 @@ void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
     if (dir == PAL_AUDIO_OUTPUT) {
         if (in_type == PAL_STREAM_LOW_LATENCY && !low_latency_bargein_enable) {
             PAL_VERBOSE(LOG_TAG, "Ignore low latency playback stream");
+        } else if (in_type == PAL_STREAM_SENSOR_PCM_RENDERER) {
+            PAL_VERBOSE(LOG_TAG, "Ignore sensor renderer stream");
         } else {
             *rx_conc = true;
         }
