@@ -27,8 +27,8 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 * -->
 
@@ -1526,6 +1526,16 @@
                 <graph_kv key="0xA3000000" value="0xA3000002"/>
                 <!-- DEVICEPP_TX - DEVICEPP_TX_VOIP_FLUENCE_SMECNS -->
                 <graph_kv key="0xAD000000" value="0xAD000007"/>
+            </keys_and_values>
+        </devicepp>
+       <!-- IN Ultrasound DevicePPs -->
+        <devicepp id="PAL_DEVICE_IN_ULTRASOUND_MIC">
+            <keys_and_values StreamType="PAL_STREAM_SENSOR_PCM_DATA"
+                DevicePPType="SINGLE_MIC_48KHZ_16BIT_RAW_LPI_TX_MACRO,DUAL_MIC_48KHZ_16BIT_RAW_LPI_TX_MACRO">
+                <!-- DEVICETX - ULTRASOUND_TX -->
+                <graph_kv key="0xA3000000" value="0xA300000B"/>
+                <!-- DEVICEPP_TX - DEVICEPP_TX_RAW_LPI -->
+                <graph_kv key="0xAD000000" value="0xAD00000C"/>
             </keys_and_values>
         </devicepp>
     </devicepps>
