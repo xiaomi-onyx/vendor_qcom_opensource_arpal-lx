@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -266,6 +266,8 @@ public:
         uint32_t encoderMIID, uint32_t newBitrate, size_t &outputPayloadSize);
     void payloadPlaybackRateParametersConfig(uint8_t** payload, size_t* size,
                           uint32_t miid, pal_param_playback_rate *playbackRate);
+    void payloadDAMPortConfig(uint8_t** payload, size_t* size,
+                          uint32_t miid, uint8_t numChannel);
 
     int populateStreamKV(Stream* s, std::vector <std::pair<int,int>> &keyVector);
     int populateStreamKV(Stream* s, std::vector <std::pair<int,int>> &keyVectorRx,
