@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -152,13 +152,13 @@ protected:
     bool                       isTwsMonoModeOn;
     bool                       isScramblingEnabled;
     bool                       isDummySink;
-    bool                       isEncDecConfigured;
     struct pcm                 *fbPcm;
     std::vector<int>           fbpcmDevIds;
     std::shared_ptr<Bluetooth> fbDev;
     int                        abrRefCnt;
     std::mutex                 mAbrMutex;
     int                        totalActiveSessionRequests;
+    codec_version_t            codecVersion;
 
     int32_t getPCMId();
     int checkAndUpdateCustomPayload(uint8_t **paramData, size_t *paramSize);

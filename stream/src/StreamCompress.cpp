@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -831,7 +831,8 @@ int32_t StreamCompress::setVolume(struct pal_volume_data *volume)
         bool isStreamAvail = (find(vol_set_param_info.streams_.begin(),
                     vol_set_param_info.streams_.end(), mStreamAttr->type) !=
                     vol_set_param_info.streams_.end());
-        if (!forceSetParameters && mVolumeData->volume_pair[0].vol == 0.0f) {
+        if (!forceSetParameters && mVolumeData->volume_pair[0].vol == 0.0f &&
+            !vol_set_param_info.isVolumeUsingSetParam) {
             //if the volume is 0, force settting parameters as well
             status = session->setConfig(this, CALIBRATION, TAG_STREAM_VOLUME);
             forceSetParameters = true;
@@ -884,7 +885,8 @@ int32_t StreamCompress::mute_l(bool state)
            }
         }
     }
-    if (mute_by_volume) {
+    if (mute_by_volume &&
+        mStreamAttr->direction == PAL_AUDIO_OUTPUT) {
         PAL_DBG(LOG_TAG, "Skip mute/unmute as stream muted by volume");
         unMutePending = !state;
         goto exit;

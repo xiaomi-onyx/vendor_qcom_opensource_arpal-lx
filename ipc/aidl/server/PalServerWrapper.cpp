@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -275,6 +275,16 @@ void ClientInfo::removeStreamHandle(int64_t handle) {
           mStreamInfoMap.size());
 }
 
+bool ClientInfo::isValidStreamHandle(int64_t handle) {
+    std::lock_guard<std::mutex> guard(mStreamLock);
+    bool status = true;
+    if (mStreamInfoMap.count(handle) == 0) {
+        ALOGE("%s: stream handle: %llx not found for pid %d", __func__, handle, mPid);
+        status = false;
+    }
+    return status;
+}
+
 int32_t ClientInfo::onCallback(pal_stream_handle_t *handle, uint32_t eventId, uint32_t *eventData,
                                uint32_t eventDataSize, uint64_t cookie) {
     CallbackInfo *callbackInfo = (CallbackInfo *)cookie;
@@ -470,6 +480,14 @@ int PalServerWrapper::removeSharedMemoryFdPairs(int64_t handle, int dupFd) {
     return ret;
 }
 
+bool PalServerWrapper::isValidStreamHandle(int64_t handle) {
+    std::lock_guard<std::mutex> guard(mLock);
+    ALOGV("%s, caller stream handle %llx", __func__, handle);
+
+    auto client = getClient_l();
+    return client->isValidStreamHandle(handle);
+}
+
 void PalServerWrapper::removeClient(int pid) {
     std::lock_guard<std::mutex> guard(mLock);
     if (mClients.count(pid) != 0) {
@@ -566,39 +584,62 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
 }
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_close(const int64_t handle) {
-    int32_t ret = pal_stream_close((pal_stream_handle_t *)handle);
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
 
     removeClientInfoData(handle);
+    int32_t ret = pal_stream_close((pal_stream_handle_t *)handle);
     return status_tToBinderResult(ret);
 }
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_start(const int64_t handle) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     return status_tToBinderResult(pal_stream_start((pal_stream_handle_t *)handle));
 }
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_stop(const int64_t handle) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     return status_tToBinderResult(pal_stream_stop((pal_stream_handle_t *)handle));
 }
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_pause(const int64_t handle) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     return status_tToBinderResult(pal_stream_pause((pal_stream_handle_t *)handle));
 }
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_drain(const int64_t handle,
                                                             PalDrainType type) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     return status_tToBinderResult(
             pal_stream_drain((pal_stream_handle_t *)handle, (pal_drain_type_t)type));
 }
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_flush(const int64_t handle) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     return status_tToBinderResult(pal_stream_flush((pal_stream_handle_t *)handle));
 }
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_suspend(const int64_t handle) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     return status_tToBinderResult(pal_stream_suspend((pal_stream_handle_t *)handle));
 }
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_resume(const int64_t handle) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     return status_tToBinderResult(pal_stream_resume((pal_stream_handle_t *)handle));
 }
 
@@ -606,6 +647,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
         const int64_t handle, const PalBufferConfig &inAidlBufConfig,
         const PalBufferConfig &outAidlBufConfig, std::vector<PalBufferConfig> *aidlReturn) {
     pal_buffer_config_t outBufConfig, inBufConfig;
+
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
 
     inBufConfig.buf_count = inAidlBufConfig.bufCount;
     inBufConfig.buf_size = inAidlBufConfig.bufSize;
@@ -645,6 +689,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
                                                             const std::vector<PalBuffer> &inBuf,
                                                             int32_t *aidlReturn) {
     struct pal_buffer buf = {0};
+
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
 
     buf.size = inBuf.data()->size;
     if (inBuf.data()->buffer.size() == buf.size) {
@@ -709,6 +756,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
                                                            PalReadReturnData *aidlReturn) {
     struct pal_buffer buf = {0};
 
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     buf.size = inBuf.data()->size;
     buf.buffer = (uint8_t *)calloc(1, buf.size);
     if (!buf.buffer) {
@@ -745,6 +795,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_set_param(
         const int64_t handle, int32_t paramId, const PalParamPayloadShmem &payload) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     int sharedFd = payload.fd.get();
     SharedMemoryWrapper memWrapper(sharedFd, payload.payloadSize);
 
@@ -767,6 +820,10 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
                                                                 int32_t paramId,
                                                                 PalParamPayload *aidlReturn) {
     pal_param_payload *paramPayload;
+
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     int32_t ret = pal_stream_get_param((pal_stream_handle_t *)handle, paramId, &paramPayload);
 
     if (!ret) {
@@ -783,6 +840,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_set_device(
         const int64_t handle, const std::vector<PalDevice> &devs) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     int32_t devSize = devs.size();
     auto palDevices = VALUE_OR_RETURN(allocate<pal_device>(devSize * sizeof(struct pal_device)));
 
@@ -798,6 +858,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_set_volume(const int64_t handle,
                                                                  const PalVolumeData &aidlVol) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     int32_t noOfVolPairs = aidlVol.volPair.size();
     int32_t volSize = sizeof(struct pal_volume_data) + noOfVolPairs * sizeof(pal_channel_vol_kv);
     auto palVolume = VALUE_OR_RETURN(allocate<pal_volume_data>(volSize));
@@ -827,6 +890,10 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_get_timestamp(const int64_t handle,
                                                              PalSessionTime *aidlReturn) {
     struct pal_session_time stime;
+
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     int32_t ret = pal_get_timestamp((pal_stream_handle_t *)handle, &stime);
     if (!ret) {
         *aidlReturn = LegacyToAidl::convertPalSessionTimeToAidl(&stime);
@@ -837,6 +904,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_add_remove_effect(const int64_t handle,
                                                                  PalAudioEffect effect,
                                                                  bool enable) {
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     return status_tToBinderResult(pal_add_remove_effect((pal_stream_handle_t *)handle,
                                                         (pal_audio_effect_t)effect, enable));
 }
@@ -865,6 +935,10 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_create_mmap_buffer(
         const int64_t handle, int32_t minSizeFrames, PalMmapBuffer *aidlReturn) {
     struct pal_mmap_buffer info;
+
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     int32_t ret =
             pal_stream_create_mmap_buffer((pal_stream_handle_t *)handle, minSizeFrames, &info);
     if (!ret) {
@@ -876,6 +950,10 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_get_mmap_position(
         const int64_t handle, PalMmapPosition *aidlReturn) {
     struct pal_mmap_position mmapPosition;
+
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
+
     int32_t ret = pal_stream_get_mmap_position((pal_stream_handle_t *)handle, &mmapPosition);
     if (!ret) {
         *aidlReturn = LegacyToAidl::convertPalMmapPositionToAidl(&mmapPosition);
@@ -898,6 +976,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
         const int64_t handle, int32_t size, std::vector<uint8_t> *aidlReturn) {
     uint8_t *palPayload = NULL;
     size_t payloadSize = size;
+
+    if(!isValidStreamHandle(handle))
+        return status_tToBinderResult(-EINVAL);
 
     if (size > 0) {
         palPayload = (uint8_t *)calloc(1, payloadSize);

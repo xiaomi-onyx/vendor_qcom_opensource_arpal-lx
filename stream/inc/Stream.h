@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -150,7 +150,7 @@ typedef enum {
 #define HANDSET_PROT_ENABLE 48
 #define HAPTICS_VI_ENABLE 49
 #define HAPTICS_PROT_ENABLE 50
-
+#define INVALID_TAG -1
 
 /* This sleep is added to give time to kernel and
  * spf to recover from SSR so that audio-hal will

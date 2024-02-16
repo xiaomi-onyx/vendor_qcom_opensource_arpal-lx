@@ -1638,7 +1638,7 @@ int32_t StreamSoundTrigger::notifyClient(uint32_t detection) {
     if (detection == PAL_RECOGNITION_STATUS_ABORT) {
         phrase_rec_event = (struct pal_st_phrase_recognition_event*)calloc(1,
             sizeof(struct pal_st_phrase_recognition_event));
-        if (phrase_rec_event) {
+        if (phrase_rec_event == nullptr) {
             PAL_ERR(LOG_TAG, "abort event allocation failed");
             return -ENOMEM;
         }

@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -5391,6 +5391,8 @@ void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
     if (dir == PAL_AUDIO_OUTPUT) {
         if (in_type == PAL_STREAM_LOW_LATENCY && !low_latency_bargein_enable) {
             PAL_VERBOSE(LOG_TAG, "Ignore low latency playback stream");
+        } else if (in_type == PAL_STREAM_SENSOR_PCM_RENDERER) {
+            PAL_VERBOSE(LOG_TAG, "Ignore sensor renderer stream");
         } else {
             *rx_conc = true;
         }
@@ -7866,13 +7868,15 @@ int ResourceManager::restoreDeviceConfigForUPD(
         goto exit_on_error;
     }
 
-    hs_dev = Device::getObject(PAL_DEVICE_OUT_HANDSET);
-    if (hs_dev)
-        hs_dev->getDeviceAttributes(&curDevAttr);
+    if (devId == PAL_DEVICE_OUT_HANDSET) {
+        hs_dev = Device::getObject(PAL_DEVICE_OUT_HANDSET);
+        if (hs_dev)
+            hs_dev->getDeviceAttributes(&curDevAttr);
 
-    if (!doDevAttrDiffer(&dAttr, &curDevAttr)) {
-        PAL_DBG(LOG_TAG, "No need to update device attr for UPD");
-        return ret;
+        if (!doDevAttrDiffer(&dAttr, &curDevAttr)) {
+            PAL_DBG(LOG_TAG, "No need to update device attr for UPD");
+            return ret;
+        }
     }
 
     /*
@@ -10757,13 +10761,6 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
         {
             std::shared_ptr<Device> dev = nullptr;
             struct pal_device dattr;
-            struct pal_device sco_tx_dattr;
-            struct pal_device sco_rx_dattr;
-            struct pal_device dAttr;
-            std::vector <std::shared_ptr<Device>> associatedDevices;
-            std::vector <std::shared_ptr<Device>> rxDevices;
-            std::vector <std::shared_ptr<Device>> txDevices;
-            struct pal_stream_attributes sAttr;
             pal_param_btsco_t* param_bt_sco = nullptr;
             bool isScoOn = false;
 
@@ -10795,109 +10792,6 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
             if (status) {
                 PAL_ERR(LOG_TAG, "set Parameter %d failed\n", param_id);
                 goto exit;
-            }
-
-            /*
-             * Create audio patch request is not expected for HFP client call.
-             * Do not move active streams to sco device.
-             */
-            if (param_bt_sco->is_bt_hfp)
-                goto exit;
-
-            /* When BT_SCO = ON received, make sure route all the active streams to
-             * SCO devices in order to avoid any potential delay with create audio
-             * patch request for SCO devices.
-             */
-            if (param_bt_sco->bt_sco_on == true) {
-                mResourceManagerMutex.unlock();
-                mActiveStreamMutex.lock();
-                for (auto& str : mActiveStreams) {
-                    str->getStreamAttributes(&sAttr);
-                    associatedDevices.clear();
-                    if ((sAttr.direction == PAL_AUDIO_OUTPUT) &&
-                        ((sAttr.type == PAL_STREAM_LOW_LATENCY) ||
-                         (sAttr.type == PAL_STREAM_ULTRA_LOW_LATENCY) ||
-                         (sAttr.type == PAL_STREAM_VOIP_RX) ||
-                         (sAttr.type == PAL_STREAM_PCM_OFFLOAD) ||
-                         (sAttr.type == PAL_STREAM_SPATIAL_AUDIO) ||
-                         (sAttr.type == PAL_STREAM_DEEP_BUFFER) ||
-                         (sAttr.type == PAL_STREAM_COMPRESSED) ||
-                         (sAttr.type == PAL_STREAM_GENERIC))) {
-                        str->getAssociatedDevices(associatedDevices);
-                        for (int i = 0; i < associatedDevices.size(); i++) {
-                            if (!isDeviceActive_l(associatedDevices[i], str) ||
-                                !str->isActive()) {
-                                continue;
-                            }
-                            dAttr.id = (pal_device_id_t)associatedDevices[i]->getSndDeviceId();
-                            dev = Device::getInstance(&dAttr, rm);
-                            if (dev && (dAttr.id != PAL_DEVICE_OUT_PROXY) &&
-                                isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_SCO)) {
-                                rxDevices.push_back(dev);
-                            }
-                        }
-                    } else if ((sAttr.direction == PAL_AUDIO_INPUT) &&
-                            ((sAttr.type == PAL_STREAM_VOIP_TX)||
-                            (sAttr.type == PAL_STREAM_DEEP_BUFFER))) {
-                        str->getAssociatedDevices(associatedDevices);
-                        for (int i = 0; i < associatedDevices.size(); i++) {
-                            if (!isDeviceActive_l(associatedDevices[i], str) ||
-                                !str->isActive()) {
-                                continue;
-                            }
-                            dAttr.id = (pal_device_id_t)associatedDevices[i]->getSndDeviceId();
-                            dev = Device::getInstance(&dAttr, rm);
-                            if (dev && isDeviceAvailable(PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET)) {
-                                txDevices.push_back(dev);
-                            }
-                        }
-                    }
-                }
-
-                // get the default device config for bt-sco and bt-sco-mic
-                sco_rx_dattr.id = PAL_DEVICE_OUT_BLUETOOTH_SCO;
-                status = getDeviceConfig(&sco_rx_dattr, NULL);
-                if (status) {
-                    PAL_ERR(LOG_TAG, "getDeviceConfig for bt-sco failed");
-                    mActiveStreamMutex.unlock();
-                    goto exit_no_unlock;
-                }
-
-                sco_tx_dattr.id = PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET;
-                status = getDeviceConfig(&sco_tx_dattr, NULL);
-                if (status) {
-                    PAL_ERR(LOG_TAG, "getDeviceConfig for bt-sco-mic failed");
-                    mActiveStreamMutex.unlock();
-                    goto exit_no_unlock;
-                }
-
-                SortAndUnique(rxDevices);
-                SortAndUnique(txDevices);
-
-                /*
-                 * If there a switch in SCO configurations and at the time of BT_SCO=on,
-                 * there are streams active with old SCO configs as well as on another
-                 * device. In this case, we need to disconnect streams over SCO first and
-                 * move them to new SCO configs, before we move streams on other devices
-                 * to SCO. This is ensured by moving SCO to the beginning of the disconnect
-                 * device list.
-                 */
-                {
-                    dAttr.id = PAL_DEVICE_OUT_BLUETOOTH_SCO;
-                    dev = Device::getInstance(&dAttr, rm);
-                    auto it = std::find(rxDevices.begin(),rxDevices.end(),dev);
-                    if ((it != rxDevices.end()) && (it != rxDevices.begin()))
-                        std::iter_swap(it, rxDevices.begin());
-                }
-                mActiveStreamMutex.unlock();
-
-                for (auto& device : rxDevices) {
-                    rm->forceDeviceSwitch(device, &sco_rx_dattr);
-                }
-                for (auto& device : txDevices) {
-                    rm->forceDeviceSwitch(device, &sco_tx_dattr);
-                }
-                mResourceManagerMutex.lock();
             }
         }
         break;
@@ -13631,8 +13525,8 @@ void ResourceManager::restoreDevice(std::shared_ptr<Device> dev)
         PAL_ERR(LOG_TAG, "invalid dev cannot restore device");
         goto exit;
     }
-
-    if (isPluginPlaybackDevice((pal_device_id_t)dev->getSndDeviceId())) {
+    if (isPluginPlaybackDevice((pal_device_id_t)dev->getSndDeviceId()) &&
+        (dev->getDeviceCount() != 0)) {
         PAL_ERR(LOG_TAG, "don't restore device for usb/3.5 hs playback");
         goto exit;
     }

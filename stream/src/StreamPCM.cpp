@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -881,7 +881,8 @@ int32_t StreamPCM::setVolume(struct pal_volume_data *volume)
         bool isStreamAvail = (find(vol_set_param_info.streams_.begin(),
                     vol_set_param_info.streams_.end(), mStreamAttr->type) !=
                     vol_set_param_info.streams_.end());
-        if (!forceSetParameters && mVolumeData->volume_pair[0].vol == 0.0f) {
+        if (!forceSetParameters && mVolumeData->volume_pair[0].vol == 0.0f &&
+            !vol_set_param_info.isVolumeUsingSetParam) {
             //if the volume is 0, force settting parameters as well
             status = session->setConfig(this, CALIBRATION, TAG_STREAM_VOLUME);
             forceSetParameters = true;
@@ -1218,7 +1219,8 @@ int32_t StreamPCM::mute_l(bool state)
             }
         }
     }
-    if (mute_by_volume) {
+    if (mute_by_volume &&
+        mStreamAttr->direction == PAL_AUDIO_OUTPUT) {
         PAL_DBG(LOG_TAG, "Skip mute/unmute as stream muted by volume");
         unMutePending = !state;
         goto exit;
@@ -1535,7 +1537,7 @@ int32_t StreamPCM::isBitWidthSupported(uint32_t bitWidth)
 int32_t StreamPCM::addRemoveEffect(pal_audio_effect_t effect, bool enable)
 {
     int32_t status = 0;
-    int32_t tag = 0;
+    int32_t tag = INVALID_TAG;
 
     PAL_DBG(LOG_TAG, "Enter. session handle - %pK", session);
     mStreamMutex.lock();
@@ -1550,11 +1552,12 @@ int32_t StreamPCM::addRemoveEffect(pal_audio_effect_t effect, bool enable)
             tag = NS_ON_TAG;
         } else if (PAL_AUDIO_EFFECT_ECNS == effect) {
             tag = ECNS_ON_TAG;
-        } else {
-            PAL_ERR(LOG_TAG, "Invalid effect ID %d", effect);
-            status = -EINVAL;
-            goto exit;
         }
+    }
+    if (tag == INVALID_TAG) {
+        PAL_ERR(LOG_TAG, "Invalid effect ID %d", effect);
+        status = -EINVAL;
+        goto exit;
     }
     status = session->setConfig(this, MODULE, tag);
     if (0 != status) {

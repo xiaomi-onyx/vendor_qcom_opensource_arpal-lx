@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -65,7 +65,6 @@ Bluetooth::Bluetooth(struct pal_device *device, std::shared_ptr<ResourceManager>
       isTwsMonoModeOn(false),
       isScramblingEnabled(false),
       isDummySink(false),
-      isEncDecConfigured(false),
       abrRefCnt(0),
       totalActiveSessionRequests(0)
 {
@@ -142,7 +141,10 @@ void Bluetooth::updateDeviceAttributes()
         deviceAttr.config.aud_fmt_id = PAL_AUDIO_FMT_DEFAULT_COMPRESSED;
         break;
     case CODEC_TYPE_APTX_AD_QLEA:
-        deviceAttr.config.sample_rate = SAMPLINGRATE_192K;
+        if (codecVersion == V1)
+            deviceAttr.config.sample_rate = SAMPLINGRATE_96K;
+        else
+            deviceAttr.config.sample_rate = SAMPLINGRATE_192K;
         deviceAttr.config.aud_fmt_id = PAL_AUDIO_FMT_DEFAULT_COMPRESSED;
         break;
     default:
@@ -461,7 +463,7 @@ int Bluetooth::configureGraphModules()
     codecConfig.ch_info.channels = out_buf->channel_count;
 
     isAbrEnabled = out_buf->is_abr_enabled;
-    isEncDecConfigured = (out_buf->is_enc_config_set && out_buf->is_dec_config_set);
+    codecVersion = out_buf->codec_version;
 
     /* Reset device GKV for AAC ABR */
     if ((codecFormat == CODEC_TYPE_AAC) && isAbrEnabled)
@@ -725,15 +727,12 @@ void Bluetooth::startAbr()
 
     if ((codecFormat == CODEC_TYPE_APTX_AD_SPEECH) ||
             (codecFormat == CODEC_TYPE_LC3) ||
-            (codecFormat == CODEC_TYPE_APTX_AD_QLEA)) {
-        fbDevice.config.sample_rate = SAMPLINGRATE_96K;
+            (codecFormat == CODEC_TYPE_APTX_AD_QLEA) ||
+            (codecFormat == CODEC_TYPE_APTX_AD_R4)) {
+        fbDevice.config.sample_rate = deviceAttr.config.sample_rate;
     } else {
         fbDevice.config.sample_rate = SAMPLINGRATE_8K;
     }
-
-    /* Use Rx path device configuration, in case of APTx Ad R4 */
-    if (codecFormat == CODEC_TYPE_APTX_AD_R4)
-        fbDevice.config.sample_rate = deviceAttr.config.sample_rate;
 
     if (codecType == DEC) { /* Usecase is TX, feedback device will be RX */
         if (deviceAttr.id == PAL_DEVICE_IN_BLUETOOTH_A2DP) {
@@ -849,23 +848,6 @@ void Bluetooth::startAbr()
         if (ret) {
             PAL_ERR(LOG_TAG, "getMiid for feedback device failed");
             goto disconnect_fe;
-        }
-
-        switch (codecFormat) {
-        case CODEC_TYPE_LC3:
-        case CODEC_TYPE_APTX_AD_QLEA:
-        case CODEC_TYPE_APTX_AD_R4:
-            if (!isEncDecConfigured) {
-                /* In case of BLE stereo recording/voice_call_decode_session, if only decoder
-                 * path configs are present so use the same config for RX feeedback path too
-                 */
-                 bt_ble_codec = (audio_lc3_codec_cfg_t*)codecInfo;
-                 memcpy(&bt_ble_codec->enc_cfg.toAirConfig, &bt_ble_codec->dec_cfg.fromAirConfig,
-                     sizeof(lc3_cfg_t));
-            }
-            break;
-        default:
-            break;
         }
 
         ret = getPluginPayload(&pluginLibHandle, &codec, &out_buf, (codecType == DEC ? ENC : DEC));
@@ -1184,7 +1166,6 @@ BtA2dp::BtA2dp(struct pal_device *device, std::shared_ptr<ResourceManager> Rm)
     pluginHandler = NULL;
     pluginCodec = NULL;
 
-    init();
     param_bt_a2dp.reconfig = false;
     param_bt_a2dp.a2dp_suspended = false;
     param_bt_a2dp.a2dp_capture_suspended = false;
@@ -1198,6 +1179,10 @@ BtA2dp::BtA2dp(struct pal_device *device, std::shared_ptr<ResourceManager> Rm)
     param_bt_a2dp.reconfig_supported = isA2dpOffloadSupported;
     param_bt_a2dp.latency = 0;
     a2dpLatencyMode = AUDIO_LATENCY_MODE_FREE;
+
+    if (isA2dpOffloadSupported) {
+        init();
+    }
 }
 
 BtA2dp::~BtA2dp()

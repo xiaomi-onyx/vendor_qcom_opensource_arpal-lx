@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -91,6 +91,7 @@ class IStreamOps {
     virtual void removeStreamHandle(int64_t handle) = 0;
     virtual void addSharedMemoryFdPairs(int64_t handle, int input, int dupFd) = 0;
     virtual int removeSharedMemoryFdPairs(int64_t handle, int dupFd) = 0;
+    virtual bool isValidStreamHandle(int64_t handle) = 0;
     virtual ~IStreamOps() = default;
 };
 
@@ -132,6 +133,7 @@ class ClientInfo : public IStreamOps {
     void addSharedMemoryFdPairs(int64_t handle, int input, int dupFd) override;
     // remove the Fd and return input fd for this.
     int removeSharedMemoryFdPairs(int64_t handle, int dupFd) override;
+    bool isValidStreamHandle(int64_t handle);
     void closeSharedMemoryFdPairs(int64_t handle);
     void registerCallback(int64_t handle, const std::shared_ptr<IPALCallback> &callback,
                           std::shared_ptr<CallbackInfo> callBackInfo);
@@ -216,6 +218,7 @@ class PalServerWrapper : public BnPAL, public IStreamOps {
     void addSharedMemoryFdPairs(int64_t handle, int input, int dupFd) override;
     // remove the Fd and return input fd for this.
     int removeSharedMemoryFdPairs(int64_t handle, int dupFd) override;
+    bool isValidStreamHandle(int64_t handle) override;
 
     // it returns the client as per caller pid, must be called with lock held
     std::shared_ptr<ClientInfo> getClient_l();

@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1424,6 +1424,46 @@ set_mixer:
                         goto exit;
                     }
                 }
+            } else if (sAttr.type == PAL_STREAM_SENSOR_PCM_DATA) {
+                status = SessionAlsaUtils::getModuleInstanceId(mixer, pcmDevIds.at(0),
+                                           txAifBackEnds[0].second.data(), DEVICE_ADAM, &miid);
+                if (status != 0) {
+                    PAL_ERR(LOG_TAG,"getModuleInstanceId failed\n");
+                } else {
+                    status = s->getAssociatedDevices(associatedDevices);
+                    if (0 != status) {
+                        PAL_ERR(LOG_TAG,"getAssociatedDevices Failed\n");
+                        goto exit;
+                    }
+                    if (associatedDevices.empty()) {
+                        PAL_ERR(LOG_TAG,"No device attached\n");
+                        goto exit;
+                    }
+                    status = associatedDevices[0]->getDeviceAttributes(&dAttr);
+                    if (0 != status) {
+                        PAL_ERR(LOG_TAG,"get Device Attributes Failed\n");
+                        goto exit;
+                    }
+                    if (dAttr.config.ch_info.channels > 1) {
+                        builder->payloadDAMPortConfig(&payload, &payloadSize, miid,
+                                                      dAttr.config.ch_info.channels);
+                        if (payloadSize && payload) {
+                            status = updateCustomPayload(payload, payloadSize);
+                            freeCustomPayload(&payload, &payloadSize);
+                            if (0 != status) {
+                                PAL_ERR(LOG_TAG,"updateCustomPayload Failed\n");
+                                goto exit;
+                            }
+                        }
+                        status = SessionAlsaUtils::setMixerParameter(mixer, pcmDevIds.at(0),
+                                                                 customPayload, customPayloadSize);
+                        freeCustomPayload();
+                        if (status != 0) {
+                            PAL_ERR(LOG_TAG, "setMixerParameter failed for RAT render");
+                            goto exit;
+                        }
+                    }
+                }
             }
 
             if (sAttr.type == PAL_STREAM_DEEP_BUFFER) {
@@ -1798,6 +1838,16 @@ set_mixer:
                 }
             }
 pcm_start:
+            if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
+                dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+                status = notifyUPDToneRendererFmtChng(&dAttr,
+                            US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_START);
+                if (status) {
+                    PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
+                            "format change START. status = %d", status);
+                    goto exit;
+                }
+            }
             status = setInitialVolume();
             if (status != 0) {
                 PAL_ERR(LOG_TAG, "setVolume failed");
@@ -1822,6 +1872,17 @@ pcm_start:
                 if (status) {
                     status = errno;
                     PAL_ERR(LOG_TAG, "pcm_start failed %d", status);
+                } else {
+                    if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
+                        dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+                        status = notifyUPDToneRendererFmtChng(&dAttr,
+                                    US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_DONE);
+                        if (status) {
+                            PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
+                                    "format change START. status = %d", status);
+                            goto exit;
+                        }
+                    }
                 }
             }
 
@@ -1910,33 +1971,11 @@ pcm_start:
                 }
             }
 
-            if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
-                dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
-                status = notifyUPDToneRendererFmtChng(&dAttr,
-                            US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_START);
-                if (status) {
-                    PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
-                            "format change START. status = %d", status);
-                    goto exit;
-                }
-            }
-
             if (pcmRx) {
                 status = pcm_start(pcmRx);
                 if (status) {
                     status = errno;
                     PAL_ERR(LOG_TAG, "pcm_start rx failed %d", status);
-                } else {
-                    if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
-                        dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
-                        status = notifyUPDToneRendererFmtChng(&dAttr,
-                                    US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_DONE);
-                        if (status) {
-                            PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
-                                    "format change START. status = %d", status);
-                            goto exit;
-                        }
-                    }
                 }
             }
             if (pcmTx) {
