@@ -1591,7 +1591,7 @@ int BtA2dp::startPlayback()
             PAL_ERR(LOG_TAG, "BT controller start failed");
             return ret;
         }
-        PAL_ERR(LOG_TAG, "BT controller start return = %d", ret);
+        PAL_INFO(LOG_TAG, "BT controller start return = %d", ret);
 
         if (audio_source_set_latency_mode_api) {
             ret = audio_source_set_latency_mode_api(get_session_type(), a2dpLatencyMode);
