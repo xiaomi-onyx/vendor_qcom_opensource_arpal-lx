@@ -158,6 +158,10 @@ public:
     std::shared_ptr<CaptureProfile> GetCurrentCaptureProfile();
     int32_t DisconnectDevice(pal_device_id_t device_id) override;
     int32_t ConnectDevice(pal_device_id_t device_id) override;
+    int disconnectStreamDevice_l(Stream* streamHandle,
+        pal_device_id_t dev_id) override;
+    int connectStreamDevice_l(Stream* streamHandle,
+        struct pal_device *dattr) override;
     int32_t Resume() override;
     int32_t Pause() override;
     int32_t GetCurrentStateId();
@@ -504,6 +508,7 @@ private:
                          st_module_type_t module_type);
     void AddEngine(std::shared_ptr<EngineCfg> engine_cfg);
     void updateStreamAttributes();
+    int32_t UpdateDeviceConfig();
     void UpdateModelId(st_module_type_t type);
     int32_t LoadSoundModel(struct pal_st_sound_model *sm_data);
     int32_t UnloadSoundModel();
@@ -539,6 +544,7 @@ private:
     int32_t ProcessInternalEvent(std::shared_ptr<StEventConfig> ev_cfg);
     void GetUUID(class SoundTriggerUUID *uuid, struct pal_st_sound_model *sound_model);
     void UpdateCaptureHandleInfo(bool start);
+    bool IsSameDeviceType(pal_device_id_t dev_id, pal_device_id_t curr_dev_id);
     std::shared_ptr<VoiceUIPlatformInfo> vui_ptfm_info_;
     std::shared_ptr<VUIStreamConfig> sm_cfg_;
     SoundModelInfo* sm_info_;
@@ -591,5 +597,12 @@ private:
     // flag to indicate whether we should update common capture profile in RM
     bool common_cp_update_disable_;
     bool second_stage_processing_;
+    bool is_backend_shared_;
+    /*
+     * Used for device switch case when client need to switch
+     * to specific device attributes instead of capture profile
+     * from resourcemanager xml.
+     */
+    struct pal_device *dattr_specified_;
 };
 #endif // STREAMSOUNDTRIGGER_H_
