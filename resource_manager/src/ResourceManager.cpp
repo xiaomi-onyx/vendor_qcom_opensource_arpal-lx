@@ -26,7 +26,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
  * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
@@ -573,7 +573,7 @@ std::map<int, std::string> ResourceManager::spkrTempCtrlsMap;
 std::map<uint32_t, uint32_t> ResourceManager::btSlimClockSrcMap;
 
 std::shared_ptr<group_dev_config_t> ResourceManager::activeGroupDevConfig = nullptr;
-std::shared_ptr<group_dev_config_t> ResourceManager::currentGroupDevConfig = nullptr;
+group_dev_config_t ResourceManager::currentGroupDevConfig = {};
 std::map<group_dev_config_idx_t, std::shared_ptr<group_dev_config_t>> ResourceManager::groupDevConfigMap;
 std::vector<int> ResourceManager::spViChannelMapCfg = {};
 
@@ -3104,6 +3104,7 @@ int32_t ResourceManager::getDeviceConfig(struct pal_device *deviceattr,
                     deviceattr->id,deviceattr->config.sample_rate,
                     deviceattr->config.bit_width);
             break;
+        case PAL_DEVICE_OUT_ULTRASOUND:
         case PAL_DEVICE_OUT_ULTRASOUND_DEDICATED:
             /* copy all config from stream attributes for sensor renderer */
             if (!sAttr) {
@@ -13654,39 +13655,39 @@ bool ResourceManager::doDevAttrDiffer(struct pal_device *inDevAttr,
     }
 
     /* if it's group device, compare group config to decide device switch */
-    if (ResourceManager::activeGroupDevConfig && ResourceManager::currentGroupDevConfig &&
+    if (ResourceManager::activeGroupDevConfig &&
             (inDevAttr->id == PAL_DEVICE_OUT_SPEAKER ||
              inDevAttr->id == PAL_DEVICE_OUT_HANDSET)) {
         if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate !=
-            ResourceManager::currentGroupDevConfig->grp_dev_hwep_cfg.sample_rate) {
+            ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate) {
             PAL_DBG(LOG_TAG, "found diff sample rate %d, running dev has %d, device switch needed",
                     ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate,
-                    ResourceManager::currentGroupDevConfig->grp_dev_hwep_cfg.sample_rate);
+                    ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate);
             ret = true;
         }
         if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels !=
-            ResourceManager::currentGroupDevConfig->grp_dev_hwep_cfg.channels) {
+            ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.channels) {
             PAL_DBG(LOG_TAG, "found diff channel %d, running dev has %d, device switch needed",
                     ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels,
-                    ResourceManager::currentGroupDevConfig->grp_dev_hwep_cfg.channels);
+                    ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.channels);
             ret = true;
         }
         if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.aud_fmt_id !=
-            ResourceManager::currentGroupDevConfig->grp_dev_hwep_cfg.aud_fmt_id) {
+            ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.aud_fmt_id) {
             PAL_DBG(LOG_TAG, "found diff format %d, running dev has %d, device switch needed",
                     ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.aud_fmt_id,
-                    ResourceManager::currentGroupDevConfig->grp_dev_hwep_cfg.aud_fmt_id);
+                    ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.aud_fmt_id);
             ret = true;
         }
         if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.slot_mask !=
-            ResourceManager::currentGroupDevConfig->grp_dev_hwep_cfg.slot_mask) {
+            ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.slot_mask) {
             PAL_DBG(LOG_TAG, "found diff slot mask %d, running dev has %d, device switch needed",
                     ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.slot_mask,
-                    ResourceManager::currentGroupDevConfig->grp_dev_hwep_cfg.slot_mask);
+                    ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.slot_mask);
             ret = true;
         }
         if (strcmp(ResourceManager::activeGroupDevConfig->snd_dev_name.c_str(),
-                   ResourceManager::currentGroupDevConfig->snd_dev_name.c_str())) {
+                   ResourceManager::currentGroupDevConfig.snd_dev_name.c_str())) {
             PAL_DBG(LOG_TAG, "found new snd device %s, device switch needed",
                     ResourceManager::activeGroupDevConfig->snd_dev_name.c_str());
             ret = true;
