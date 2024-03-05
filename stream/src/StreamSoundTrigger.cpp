@@ -1197,13 +1197,14 @@ int32_t StreamSoundTrigger::UpdateDeviceConfig() {
         } else if (dattr_specified_) {
             dev = Device::getInstance(dattr_specified_, rm);
             dev->setDeviceAttributes(*dattr_specified_);
-            dev->setSndName(cap_prof_->GetSndName());
         } else {
             dattr.id = cap_prof_->GetDevId();
             dattr.config.sample_rate = cap_prof_->GetSampleRate();
             dattr.config.bit_width = cap_prof_->GetBitWidth();
             dattr.config.ch_info.channels = cap_prof_->GetChannels();
             dattr.config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
+            strlcpy(dattr.sndDevName, cap_prof_->GetSndName().c_str(),
+                DEVICE_NAME_MAX_SIZE);
 
             dev = Device::getInstance(&dattr, rm);
             if (!dev) {
@@ -1217,7 +1218,6 @@ int32_t StreamSoundTrigger::UpdateDeviceConfig() {
             dev->getTopPriorityDeviceAttr(&new_dattr, &dev_prio);
             dev = Device::getInstance(&new_dattr, rm);
             dev->setDeviceAttributes(new_dattr);
-            dev->setSndName(cap_prof_->GetSndName());
         }
         if (!dev) {
             PAL_ERR(LOG_TAG, "Device creation is failed");
