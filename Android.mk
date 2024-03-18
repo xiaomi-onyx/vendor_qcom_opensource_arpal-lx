@@ -5,15 +5,6 @@ PAL_BASE_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 
-LOCAL_MODULE := libarpal_headers
-LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/inc
-
-LOCAL_VENDOR_MODULE := true
-
-include $(BUILD_HEADER_LIBRARY)
-
-include $(CLEAR_VARS)
-
 LOCAL_MODULE        := libar-pal
 LOCAL_MODULE_OWNER  := qti
 LOCAL_MODULE_TAGS   := optional
