@@ -944,6 +944,7 @@ int SessionAlsaPcm::start(Stream * s)
     int DeviceId;
     struct disable_lpm_info lpm_info = {};
     bool isStreamAvail = false;
+    bool us_notify_format = false;
 
     PAL_DBG(LOG_TAG, "Enter");
 
@@ -1838,8 +1839,27 @@ set_mixer:
                 }
             }
 pcm_start:
-            if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
-                dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+            if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER) {
+                if (rm->activeGroupDevConfig) {
+                    if ((dAttr.config.sample_rate !=
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate) ||
+                        (dAttr.config.ch_info.channels !=
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.channels) ||
+                        (dAttr.config.bit_width != ResourceManager::palFormatToBitwidthLookup(
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.aud_fmt_id))) {
+                         us_notify_format = true;
+                         dAttr.config.sample_rate =
+                             rm->currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate;
+                         dAttr.config.ch_info.channels =
+                             rm->currentGroupDevConfig.grp_dev_hwep_cfg.channels;
+                         dAttr.config.bit_width = ResourceManager::palFormatToBitwidthLookup(
+                             rm->currentGroupDevConfig.grp_dev_hwep_cfg.aud_fmt_id);
+                    }
+                } else if (dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+                    us_notify_format = true;
+                }
+            }
+            if (us_notify_format) {
                 status = notifyUPDToneRendererFmtChng(&dAttr,
                             US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_START);
                 if (status) {
@@ -1873,8 +1893,7 @@ pcm_start:
                     status = errno;
                     PAL_ERR(LOG_TAG, "pcm_start failed %d", status);
                 } else {
-                    if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
-                        dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+                    if (us_notify_format) {
                         status = notifyUPDToneRendererFmtChng(&dAttr,
                                     US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_DONE);
                         if (status) {
@@ -2411,6 +2430,9 @@ int SessionAlsaPcm::disconnectSessionDevice(Stream *streamHandle,
         if (status) {
             PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
                     "format change START. status = %d", status);
+        } else {
+            /*sleep for 20ms to wait for EOS propagation to HWEP*/
+            usleep(20000);
         }
     }
 
@@ -2543,6 +2565,15 @@ int SessionAlsaPcm::connectSessionDevice(Stream* streamHandle, pal_stream_type_t
             }
         } else {
             if (streamType == PAL_STREAM_SENSOR_PCM_RENDERER) {
+                // update sr/ch/bw in dAttr if virtual port is enabled
+                if (rm->activeGroupDevConfig) {
+                    dAttr.config.sample_rate =
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate;
+                    dAttr.config.ch_info.channels =
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.channels;
+                    dAttr.config.bit_width = ResourceManager::palFormatToBitwidthLookup(
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.aud_fmt_id);
+                }
                 status = notifyUPDToneRendererFmtChng(&dAttr,
                             US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_DONE);
                 if (status) {

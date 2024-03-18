@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -362,7 +362,7 @@ typedef struct group_dev_hwep_config_ctl
 {
     uint32_t sample_rate;
     uint32_t channels;
-    uint32_t aud_fmt_id;
+    pal_audio_fmt_t aud_fmt_id;
     uint32_t slot_mask;
 } group_dev_hwep_config_t;
 
@@ -727,7 +727,7 @@ public:
     static cl_deinit_t cl_deinit;
     static cl_set_boost_state_t cl_set_boost_state;
     static std::shared_ptr<group_dev_config_t> activeGroupDevConfig;
-    static std::shared_ptr<group_dev_config_t> currentGroupDevConfig;
+    static group_dev_config_t currentGroupDevConfig;
 
     static void *vui_dmgr_lib_handle;
     static vui_dmgr_init_t vui_dmgr_init;
