@@ -235,6 +235,10 @@
                     <snd_device_name>unprocessed-hdr-mic-inverted-portrait</snd_device_name>
                 </custom-config>
             </usecase>
+            <usecase>
+                <name>PAL_STREAM_VOICE_UI</name>
+                <ec_enable>1</ec_enable>
+            </usecase>
             <ec_rx_device>
                 <id>PAL_DEVICE_OUT_HANDSET</id>
                 <id>PAL_DEVICE_OUT_SPEAKER</id>
@@ -395,6 +399,10 @@
             </usecase>
             <usecase>
                 <name>PAL_STREAM_ULTRA_LOW_LATENCY</name>
+            </usecase>
+            <usecase>
+                <name>PAL_STREAM_VOICE_UI</name>
+                <ec_enable>1</ec_enable>
             </usecase>
             <ec_rx_device>
                 <id>PAL_DEVICE_OUT_WIRED_HEADSET</id>
@@ -1473,6 +1481,22 @@
                 <param channels="1" />
                 <param bit_width="16" />
                 <param snd_name="headset-va-mic" />
+                <param ec_ref="true" />
+            </capture_profile>
+            <capture_profile name="DUAL_HANDSET_MIC_48KHZ_16BIT_FFECNS">
+                <param device_id="PAL_DEVICE_IN_HANDSET_MIC" />
+                <param sample_rate="48000" />
+                <param channels="2" />
+                <param bit_width="16" />
+                <param snd_name="handset-dmic-endfire" />
+                <param ec_ref="true" />
+            </capture_profile>
+            <capture_profile name="SINGLE_HEADSET_MIC_48KHZ_16BIT_FFECNS">
+                <param device_id="PAL_DEVICE_IN_WIRED_HEADSET" />
+                <param sample_rate="48000" />
+                <param channels="1" />
+                <param bit_width="16" />
+                <param snd_name="headset-mic" />
                 <param ec_ref="true" />
             </capture_profile>
         </capture_profile_list>

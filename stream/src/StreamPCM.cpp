@@ -238,7 +238,7 @@ int32_t  StreamPCM::open()
         rm->unlockGraph();
         if (0 != status) {
             PAL_ERR(LOG_TAG, "session open failed with status %d", status);
-            goto exit;
+            goto closeDevice;
         }
         PAL_VERBOSE(LOG_TAG, "session open successful");
 
@@ -261,6 +261,7 @@ int32_t  StreamPCM::open()
         }
         currentState = STREAM_INIT;
         PAL_DBG(LOG_TAG, "stream pcm opened. state %d", currentState);
+        goto exit;
     } else if (currentState == STREAM_INIT) {
         PAL_INFO(LOG_TAG, "Stream is already opened, state %d", currentState);
         status = 0;
@@ -270,6 +271,13 @@ int32_t  StreamPCM::open()
         //TBD : which error code to return here.
         status = -EINVAL;
         goto exit;
+    }
+closeDevice:
+    for (int32_t i = 0; i < mDevices.size(); i++) {
+        status = mDevices[i]->close();
+        if (0 != status) {
+            PAL_ERR(LOG_TAG, "device close is failed with status %d", status);
+        }
     }
 exit:
     palStateEnqueue(this, PAL_STATE_OPENED, status);

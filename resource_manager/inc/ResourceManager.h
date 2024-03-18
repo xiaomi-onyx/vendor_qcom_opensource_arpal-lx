@@ -607,6 +607,7 @@ protected:
     uint64_t stream_instances[PAL_STREAM_MAX];
     uint64_t in_stream_instances[PAL_STREAM_MAX];
     static int mixerEventRegisterCount;
+    static int TxconcurrencyEnableCount;
     static int concurrencyEnableCount;
     static int concurrencyDisableCount;
     static int ACDConcurrencyEnableCount;
@@ -925,6 +926,7 @@ public:
                                 pal_stream_direction_t dir,
                                 bool active);
     bool isAnyVUIStreamBuffering();
+    bool isTxConcurrencyActive() { return (TxconcurrencyEnableCount > 0); }
     void handleDeferredSwitch();
     void handleConcurrentStreamSwitch(std::vector<pal_stream_type_t>& st_streams);
     std::shared_ptr<Device> getActiveEchoReferenceRxDevices(Stream *tx_str);
