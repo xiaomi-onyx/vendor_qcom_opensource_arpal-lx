@@ -28,8 +28,8 @@
  */
 
 /*
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 
 Redistribution and use in source and binary forms, with or without
@@ -85,6 +85,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define NUM_OF_CAL_KEYS 3
 #define MAX_RETRY 3
+#define POP_SUPPRESSOR_RAMP_DELAY (1*1000)
 
 static uint32_t retries = 0;
 
@@ -1098,6 +1099,10 @@ int SessionAlsaVoice::stop(Stream * s)
             }
         }
     }
+    /*config mute on pop suppressor*/
+    setPopSuppressorMute(s);
+    usleep(POP_SUPPRESSOR_RAMP_DELAY);
+
     if (pcmRx) {
         status = pcm_stop(pcmRx);
         if (status) {
@@ -1862,6 +1867,7 @@ int SessionAlsaVoice::disconnectSessionDevice(Stream *streamHandle,
     if (rxAifBackEnds.size() > 0) {
         /*config mute on pop suppressor*/
         setPopSuppressorMute(streamHandle);
+        usleep(POP_SUPPRESSOR_RAMP_DELAY);
 
         /*if HW sidetone is enable disable it */
         if (sideTone_cnt > 0) {
