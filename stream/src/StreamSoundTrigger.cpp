@@ -1183,6 +1183,7 @@ int32_t StreamSoundTrigger::UpdateDeviceConfig() {
     }
     dev_id = cap_prof_->GetDevId();
     is_backend_shared_= (dev_id == PAL_DEVICE_IN_HANDSET_MIC) ||
+        (dev_id == PAL_DEVICE_IN_SPEAKER_MIC) ||
         (dev_id == PAL_DEVICE_IN_WIRED_HEADSET);
     mDevPPSelector = cap_prof_->GetName();
     PAL_DBG(LOG_TAG, "devicepp selector: %s", mDevPPSelector.c_str());
@@ -3885,8 +3886,10 @@ bool StreamSoundTrigger::IsSameDeviceType(
     } else {
         return (dev_id == curr_dev_id) ||
             ((dev_id == PAL_DEVICE_IN_HANDSET_VA_MIC ||
+              dev_id == PAL_DEVICE_IN_SPEAKER_MIC ||
               dev_id == PAL_DEVICE_IN_HANDSET_MIC) &&
              (curr_dev_id == PAL_DEVICE_IN_HANDSET_VA_MIC ||
+              curr_dev_id == PAL_DEVICE_IN_SPEAKER_MIC ||
               curr_dev_id == PAL_DEVICE_IN_HANDSET_MIC)) ||
             ((dev_id == PAL_DEVICE_IN_HEADSET_VA_MIC ||
               dev_id == PAL_DEVICE_IN_WIRED_HEADSET) &&

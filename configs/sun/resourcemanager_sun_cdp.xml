@@ -349,6 +349,10 @@
                     <snd_device_name>speaker-dmic-endfire</snd_device_name>
                 </custom-config>
             </usecase>
+            <usecase>
+                <name>PAL_STREAM_VOICE_UI</name>
+                <ec_enable>1</ec_enable>
+            </usecase>
             <ec_rx_device>
                 <id>PAL_DEVICE_OUT_SPEAKER</id>
             </ec_rx_device>
