@@ -978,7 +978,9 @@ start_pcm:
         ((codecFormat == CODEC_TYPE_LC3) &&
          (fbDevice.id == PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET ||
           fbDevice.id == PAL_DEVICE_OUT_BLUETOOTH_SCO ||
-          fbDevice.id == PAL_DEVICE_OUT_BLUETOOTH_BLE))) {
+          fbDevice.id == PAL_DEVICE_OUT_BLUETOOTH_BLE)) ||
+        ((codecFormat == CODEC_TYPE_APTX_AD_R4) &&
+         (fbDevice.id == PAL_DEVICE_OUT_BLUETOOTH_BLE))) {
         fbDev->isConfigured = true;
         fbDev->deviceStartStopCount++;
         fbDev->deviceCount++;
@@ -1073,10 +1075,12 @@ void Bluetooth::stopAbr()
         PAL_DBG(LOG_TAG, " deviceCount %d deviceStartStopCount %d for device id %d",
                 fbDev->deviceCount, fbDev->deviceStartStopCount, fbDev->deviceAttr.id);
     }
-    if ((codecFormat == CODEC_TYPE_LC3) &&
+    if ((((codecFormat == CODEC_TYPE_LC3) &&
         (deviceAttr.id == PAL_DEVICE_OUT_BLUETOOTH_SCO ||
          deviceAttr.id == PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET ||
-         deviceAttr.id == PAL_DEVICE_IN_BLUETOOTH_BLE) &&
+         deviceAttr.id == PAL_DEVICE_IN_BLUETOOTH_BLE)) ||
+        ((codecFormat == CODEC_TYPE_APTX_AD_R4) &&
+         (deviceAttr.id == PAL_DEVICE_IN_BLUETOOTH_BLE))) &&
          fbDev) {
         if ((fbDev->deviceStartStopCount > 0) &&
             (--fbDev->deviceStartStopCount == 0)) {
