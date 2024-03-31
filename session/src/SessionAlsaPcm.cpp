@@ -2417,6 +2417,7 @@ int SessionAlsaPcm::disconnectSessionDevice(Stream *streamHandle,
     struct pal_device dAttr = {};
     std::vector<std::pair<int32_t, std::string>> rxAifBackEndsToDisconnect;
     std::vector<std::pair<int32_t, std::string>> txAifBackEndsToDisconnect;
+    struct pal_stream_attributes sAttr = {};
     int32_t status = 0;
 
     deviceList.push_back(deviceToDisconnect);
@@ -2436,10 +2437,15 @@ int SessionAlsaPcm::disconnectSessionDevice(Stream *streamHandle,
         }
     }
 
+    status = streamHandle->getStreamAttributes(&sAttr);
+    if (0 != status) {
+        PAL_ERR(LOG_TAG, "getStreamAttributes Failed \n");
+    }
     if (!rxAifBackEndsToDisconnect.empty()) {
         int cnt = 0;
-        if (streamType != PAL_STREAM_ULTRASOUND &&
-            streamType != PAL_STREAM_LOOPBACK)
+        if ((streamType != PAL_STREAM_ULTRASOUND &&
+            streamType != PAL_STREAM_LOOPBACK) || (streamType == PAL_STREAM_LOOPBACK &&
+            sAttr.info.opt_stream_info.loopback_type == PAL_STREAM_LOOPBACK_PLAYBACK_ONLY))
             status = SessionAlsaUtils::disconnectSessionDevice(streamHandle, streamType, rm,
                      dAttr, (pcmDevIds.size() ? pcmDevIds : pcmDevRxIds), rxAifBackEndsToDisconnect);
         else {
@@ -2530,6 +2536,7 @@ int SessionAlsaPcm::connectSessionDevice(Stream* streamHandle, pal_stream_type_t
     struct pal_device dAttr = {};
     std::vector<std::pair<int32_t, std::string>> rxAifBackEndsToConnect;
     std::vector<std::pair<int32_t, std::string>> txAifBackEndsToConnect;
+    struct pal_stream_attributes sAttr = {};
     int32_t status = 0;
 
     deviceList.push_back(deviceToConnect);
@@ -2537,12 +2544,17 @@ int SessionAlsaPcm::connectSessionDevice(Stream* streamHandle, pal_stream_type_t
             txAifBackEndsToConnect);
     deviceToConnect->getDeviceAttributes(&dAttr);
 
+    status = streamHandle->getStreamAttributes(&sAttr);
+    if (0 != status) {
+        PAL_ERR(LOG_TAG, "getStreamAttributes Failed \n");
+    }
     if (!rxAifBackEndsToConnect.empty()) {
         for (const auto &elem : rxAifBackEndsToConnect)
             rxAifBackEnds.push_back(elem);
 
-        if (streamType != PAL_STREAM_ULTRASOUND &&
-            streamType != PAL_STREAM_LOOPBACK)
+        if ((streamType != PAL_STREAM_ULTRASOUND &&
+            streamType != PAL_STREAM_LOOPBACK) || (streamType == PAL_STREAM_LOOPBACK &&
+            sAttr.info.opt_stream_info.loopback_type == PAL_STREAM_LOOPBACK_PLAYBACK_ONLY))
             status = SessionAlsaUtils::connectSessionDevice(this, streamHandle, streamType, rm,
                      dAttr, (pcmDevIds.size() ? pcmDevIds : pcmDevRxIds), rxAifBackEndsToConnect);
         else
