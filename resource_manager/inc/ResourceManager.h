@@ -663,6 +663,7 @@ public:
     static bool isXPANEnabled;
     static bool isCRSCallEnabled;
     static bool isDummyDevEnabled;
+    static bool isProxyRecordActive;
     static std::mutex mChargerBoostMutex;
     /* Variable to store which speaker side is being used for call audio.
      * Valid for Stereo case only
@@ -1080,6 +1081,7 @@ public:
     int32_t resumeInCallMusic();
     int32_t pauseInCallMusic();
     void RegisterSTCaptureHandle(pal_param_st_capture_info_t stCaptureInfo, bool start);
+    static void setProxyRecordActive(bool isActive);
 };
 
 #endif

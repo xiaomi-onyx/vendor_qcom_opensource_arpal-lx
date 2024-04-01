@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -11,6 +11,8 @@ parcelable PalStreamInfo {
     long size;
     long durationUs;
     boolean hasVideo;
+    int txProxyType;
+    int rxProxyType;
     boolean isStreaming;
     int loopbackType;
     int hapticsType;
