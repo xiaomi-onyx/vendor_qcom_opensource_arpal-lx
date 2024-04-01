@@ -1777,7 +1777,7 @@ int BtA2dp::startCapture()
                 ret = audio_sink_start();
             }
 
-            PAL_ERR(LOG_TAG, "BT controller start capture return = %d",ret);
+            PAL_INFO(LOG_TAG, "BT controller start capture return = %d",ret);
             if (ret != 0 ) {
                 PAL_ERR(LOG_TAG, "BT controller start capture failed");
                 return ret;
@@ -1785,7 +1785,12 @@ int BtA2dp::startCapture()
 
             codecInfo = audio_get_dec_config((audio_format_t *)&codecFormat);
             if (codecInfo == NULL || codecFormat == CODEC_TYPE_INVALID) {
-                PAL_ERR(LOG_TAG, "invalid encoder config");
+                PAL_ERR(LOG_TAG, "invalid codec config");
+                if (audio_sink_stop_api) {
+                    audio_sink_stop_api(get_session_type());
+                } else {
+                    audio_sink_stop();
+                }
                 return -EINVAL;
             }
 
@@ -1794,7 +1799,12 @@ int BtA2dp::startCapture()
 
             ret = configureGraphModules();
             if (ret) {
-                PAL_DBG(LOG_TAG, "unable to configure DSP decoder");
+                PAL_ERR(LOG_TAG, "unable to configure DSP decoder");
+                if (audio_sink_stop_api) {
+                    audio_sink_stop_api(get_session_type());
+                } else {
+                    audio_sink_stop();
+                }
                 return ret;
             }
         }
@@ -1825,7 +1835,7 @@ int BtA2dp::startCapture()
                 ret = audio_sink_start();
             }
 
-            PAL_ERR(LOG_TAG, "BT controller start return = %d",ret);
+            PAL_INFO(LOG_TAG, "BT controller start return = %d",ret);
             if (ret != 0 ) {
                 PAL_ERR(LOG_TAG, "BT controller start failed");
                 return ret;
@@ -1839,6 +1849,11 @@ int BtA2dp::startCapture()
 
             if (codecInfo == NULL || codecFormat == CODEC_TYPE_INVALID) {
                 PAL_ERR(LOG_TAG, "invalid codec config");
+                if (audio_sink_stop_api) {
+                    audio_sink_stop_api(get_session_type());
+                } else {
+                    audio_sink_stop();
+                }
                 return -EINVAL;
             }
 
@@ -1847,7 +1862,12 @@ int BtA2dp::startCapture()
 
             ret = configureGraphModules();
             if (ret) {
-                PAL_DBG(LOG_TAG, "unable to configure DSP decoder");
+                PAL_ERR(LOG_TAG, "unable to configure DSP decoder");
+                if (audio_sink_stop_api) {
+                    audio_sink_stop_api(get_session_type());
+                } else {
+                    audio_sink_stop();
+                }
                 return ret;
             }
         }
@@ -1855,7 +1875,12 @@ int BtA2dp::startCapture()
 
     if (!isDummySink) {
         if (!a2dp_send_sink_setup_complete()) {
-            PAL_DBG(LOG_TAG, "sink_setup_complete not successful");
+            PAL_ERR(LOG_TAG, "sink_setup_complete not successful");
+            if (audio_sink_stop_api) {
+                audio_sink_stop_api(get_session_type());
+            } else {
+                audio_sink_stop();
+            }
             ret = -ETIMEDOUT;
         }
     }
