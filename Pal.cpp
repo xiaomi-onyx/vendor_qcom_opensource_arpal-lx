@@ -26,44 +26,18 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
  * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#define ATRACE_TAG (ATRACE_TAG_AUDIO | ATRACE_TAG_HAL)
 
 #define LOG_TAG "PAL: API"
 
+#include <utils/Trace.h>
 #include <set>
 #include <stdio.h>
 #include <unistd.h>
@@ -117,6 +91,7 @@ static void notify_concurrent_stream(pal_stream_type_t type,
  */
 int32_t pal_init(void)
 {
+    ATRACE_CALL();
     PAL_DBG(LOG_TAG, "Enter.");
     int32_t ret = 0;
     std::shared_ptr<ResourceManager> ri = NULL;
@@ -162,6 +137,7 @@ exit:
  */
 void pal_deinit(void)
 {
+    ATRACE_CALL();
     PAL_DBG(LOG_TAG, "Enter.");
 
     std::shared_ptr<ResourceManager> rm = NULL;
@@ -202,6 +178,7 @@ int32_t pal_stream_open(struct pal_stream_attributes *attributes,
                         pal_stream_callback cb, uint64_t cookie,
                         pal_stream_handle_t **stream_handle)
 {
+    ATRACE_CALL();
     uint64_t *stream = NULL;
     Stream *s = NULL;
     int status = 0;
@@ -272,6 +249,7 @@ exit:
 
 int32_t pal_stream_close(pal_stream_handle_t *stream_handle)
 {
+    ATRACE_CALL();
     Stream *s = NULL;
     int status = 0;
     struct pal_stream_attributes sAttr = {};
@@ -327,6 +305,7 @@ exit:
 
 int32_t pal_stream_start(pal_stream_handle_t *stream_handle)
 {
+    ATRACE_CALL();
     Stream *s = NULL;
     struct pal_stream_attributes sAttr = {};
     std::shared_ptr<ResourceManager> rm = NULL;
@@ -391,6 +370,7 @@ exit:
 
 int32_t pal_stream_stop(pal_stream_handle_t *stream_handle)
 {
+    ATRACE_CALL();
     Stream *s = NULL;
     std::shared_ptr<ResourceManager> rm = NULL;
     int status;
@@ -973,6 +953,7 @@ int32_t pal_add_remove_effect(pal_stream_handle_t *stream_handle,
 int32_t pal_stream_set_device(pal_stream_handle_t *stream_handle,
                            uint32_t no_of_devices, struct pal_device *devices)
 {
+    ATRACE_CALL();
     int status = -EINVAL;
     Stream *s = NULL;
     std::shared_ptr<ResourceManager> rm = NULL;
@@ -1271,6 +1252,7 @@ int32_t pal_stream_create_mmap_buffer(pal_stream_handle_t *stream_handle,
                               int32_t min_size_frames,
                               struct pal_mmap_buffer *info)
 {
+    ATRACE_CALL();
     Stream *s = NULL;
     int status;
     std::shared_ptr<ResourceManager> rm = NULL;
