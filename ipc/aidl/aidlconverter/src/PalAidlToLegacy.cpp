@@ -101,23 +101,9 @@ std::pair<int, int> AidlToLegacy::getFdIntFromNativeHandle(
 
 void AidlToLegacy::convertPalCallbackBuffer(const PalCallbackBuffer *rwDonePayload,
                                             pal_callback_buffer *cbBuffer) {
-    cbBuffer->size = rwDonePayload->size;
-    std::vector<uint8_t> buffData;
-    if (cbBuffer->size > 0 && rwDonePayload->buffer.size() == cbBuffer->size) {
-        buffData.resize(cbBuffer->size);
-        memcpy(buffData.data(), rwDonePayload->buffer.data(), cbBuffer->size);
-        cbBuffer->buffer = buffData.data();
-    }
-
-    auto bufTimeSpec = std::make_unique<timespec>();
-    if (!bufTimeSpec) {
-        ALOGE("%s: Failed to allocate memory for timespec", __func__);
-        return;
-    }
-    bufTimeSpec->tv_sec = rwDonePayload->timeStamp.tvSec;
-    bufTimeSpec->tv_nsec = rwDonePayload->timeStamp.tvNSec;
-
-    cbBuffer->ts = (timespec *)bufTimeSpec.get();
+    memcpy(cbBuffer->buffer, rwDonePayload->buffer.data(), cbBuffer->size);
+    cbBuffer->ts->tv_sec = rwDonePayload->timeStamp.tvSec;
+    cbBuffer->ts->tv_nsec = rwDonePayload->timeStamp.tvNSec;
     cbBuffer->status = rwDonePayload->status;
     cbBuffer->cb_buf_info.frame_index = rwDonePayload->cbBufInfo.frameIndex;
     cbBuffer->cb_buf_info.sample_rate = rwDonePayload->cbBufInfo.sampleRate;
