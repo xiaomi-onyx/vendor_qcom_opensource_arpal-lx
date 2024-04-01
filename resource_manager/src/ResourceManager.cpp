@@ -4871,6 +4871,7 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetSVACaptureProfileByPriority(
             PAL_ERR(LOG_TAG, "Failed to get capture profile");
             continue;
         } else if ((cap_prof->GetDevId() == PAL_DEVICE_IN_HANDSET_MIC) ||
+            (cap_prof->GetDevId() == PAL_DEVICE_IN_SPEAKER_MIC) ||
             (cap_prof->GetDevId() == PAL_DEVICE_IN_WIRED_HEADSET)) {
             continue;
         } else if (cap_prof->GetBackend().compare(backend) != 0) {

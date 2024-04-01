@@ -316,6 +316,8 @@ int32_t SoundTriggerEngineCapi::StartKeywordDetection()
         }
 
         det_conf_score_ = result_cfg_ptr->best_confidence;
+        PAL_INFO(LOG_TAG, "PDK Stage2 Result: is_detected = %d, best_confidence = %d, start_position = %d, end_position = %d, current_confidence = %d",
+            result_cfg_ptr->is_detected, result_cfg_ptr->best_confidence, result_cfg_ptr->start_position, result_cfg_ptr->end_position, result_cfg_ptr->current_confidence);
         if (result_cfg_ptr->is_detected) {
             exit_buffering_ = true;
             detection_state_ = KEYWORD_DETECTION_SUCCESS;
