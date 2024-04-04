@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -92,7 +92,8 @@ StreamACD::StreamACD(struct pal_stream_attributes *sattr,
     }
 
     if (!dattr) {
-        goto exit;
+        PAL_ERR(LOG_TAG, "Error: pal_device is passed as null");
+        throw std::runtime_error("pal_device is passed as null");
     }
 
     ar_mem_cpy(mStreamAttr, sizeof(pal_stream_attributes),
@@ -157,7 +158,6 @@ StreamACD::StreamACD(struct pal_stream_attributes *sattr,
     if (disable_concurrency_count) {
         paused_ = true;
     }
-exit:
     PAL_DBG(LOG_TAG, "Exit");
 }
 
