@@ -301,7 +301,6 @@
     </path>
 
     <path name="haptics-dev">
-        <ctl name="WSA2 HAPT_PCM ENABLE" value="1" />
         <ctl name="SWR DAC_Port Switch" value="1" />
     </path>
 
