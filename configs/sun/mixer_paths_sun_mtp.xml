@@ -301,6 +301,7 @@
     </path>
 
     <path name="haptics-dev">
+        <ctl name="Haptics VISENSE Switch" value="1" />
         <ctl name="SWR DAC_Port Switch" value="1" />
     </path>
 
@@ -314,7 +315,7 @@
     </path>
 
     <path name="haptics-vi-feedback-mono">
-        <ctl name="WSA2_AIF_VI Mixer WSA2_SPKR_VI_2" value="1" />
+        <ctl name="WSA2_AIF_VI Mixer WSA2_SPKR_VI_1" value="1" />
         <ctl name="WSA2 2CH_DMA ENABLE" value="1" />
     </path>
 
