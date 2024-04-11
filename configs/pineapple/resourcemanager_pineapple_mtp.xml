@@ -26,8 +26,8 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-* Changes from Qualcomm Innovation Center are provided under the following license:
-* Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+* Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+* Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause-Clear
 * -->
 
@@ -910,7 +910,7 @@
         </out-device>
         <out-device>
             <id>PAL_DEVICE_OUT_AUX_DIGITAL</id>
-            <back_end_name>DISPLAY_PORT-RX</back_end_name>
+            <back_end_name>DISPLAY_PORT-RX-0</back_end_name>
             <max_channels>32</max_channels>
             <channels>2</channels>
             <snd_device_name>display-port</snd_device_name>
@@ -971,10 +971,10 @@
         </out-device>
         <out-device>
             <id>PAL_DEVICE_OUT_AUX_DIGITAL_1</id>
-            <back_end_name>DISPLAY_PORT-RX</back_end_name>
+            <back_end_name>DISPLAY_PORT-RX-1</back_end_name>
             <max_channels>8</max_channels>
             <channels>2</channels>
-            <snd_device_name>display-port</snd_device_name>
+            <snd_device_name>display-port1</snd_device_name>
             <fractional_sr>1</fractional_sr>
             <!--specify the supported bit format on DP end point -->
             <!--this should be in the form of pal_audio_fmt_id-->
