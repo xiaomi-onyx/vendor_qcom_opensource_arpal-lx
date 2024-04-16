@@ -1044,7 +1044,10 @@ int SessionAlsaUtils::setDeviceMediaConfig(std::shared_ptr<ResourceManager> rmHa
         PAL_INFO(LOG_TAG, "%s rate ch fmt data_fmt slot_mask %ld %ld %ld %ld %ld\n", truncatedBeName.c_str(),
                 aif_group_atrr_config[0], aif_group_atrr_config[1], aif_group_atrr_config[2],
                 aif_group_atrr_config[3], aif_group_atrr_config[4]);
-        rmHandle->currentGroupDevConfig = rmHandle->activeGroupDevConfig;
+        memcpy(&rmHandle->currentGroupDevConfig, rmHandle->activeGroupDevConfig.get(),
+               sizeof(group_dev_config_t));
+        rmHandle->currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate = aif_group_atrr_config[0];
+        rmHandle->currentGroupDevConfig.grp_dev_hwep_cfg.channels = aif_group_atrr_config[1];
     }
     ctl = SessionAlsaUtils::getBeMixerControl(mixerHandle, backEndName , BE_MEDIAFMT);
     if (!ctl) {
@@ -2389,7 +2392,8 @@ int SessionAlsaUtils::connectSessionDevice(Session* sess, Stream* streamHandle, 
                     goto exit;
                 }
             }
-            if (streamType == PAL_STREAM_ULTRA_LOW_LATENCY) {
+            if (streamType == PAL_STREAM_ULTRA_LOW_LATENCY ||
+               (dAttr.id == PAL_DEVICE_IN_PROXY || dAttr.id == PAL_DEVICE_IN_RECORD_PROXY)) {
                 if (sess) {
                     sess->configureMFC(rmHandle, sAttr, dAttr, pcmDevIds,
                                     aifBackEndsToConnect[0].second.data());

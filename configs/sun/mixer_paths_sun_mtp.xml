@@ -301,7 +301,6 @@
     </path>
 
     <path name="haptics-dev">
-        <ctl name="WSA2 HAPT_PCM ENABLE" value="1" />
         <ctl name="SWR DAC_Port Switch" value="1" />
     </path>
 
@@ -555,7 +554,7 @@
         <ctl name="SpkrLeft COMP Switch" value="1" />
         <ctl name="SpkrLeft VISENSE Switch" value="1" />
         <ctl name="SpkrLeft SWR DAC_Port Switch" value="1" />
-        <ctl name="WSA_RX0 Digital Volume" value="50" />
+        <ctl name="WSA_RX0 Digital Volume" value="70" />
     </path>
 
     <path name="speaker-mono-2-ultrasound">
@@ -567,7 +566,7 @@
         <ctl name="SpkrRight VISENSE Switch" value="1" />
         <ctl name="SpkrRight SWR DAC_Port Switch" value="1" />
         <ctl name="WSA PBR Enable" value="1" />
-        <ctl name="WSA_RX1 Digital Volume" value="50" />
+        <ctl name="WSA_RX1 Digital Volume" value="70" />
     </path>
 
     <path name="speaker-ultrasound">

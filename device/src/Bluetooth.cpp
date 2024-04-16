@@ -116,8 +116,16 @@ void Bluetooth::updateDeviceAttributes()
     /* Sample rate calculation is done by kernel proxy driver in
      * case of XPAN. Send Encoder sample rate itself as part of
      * device attributes.
+     *
+     * For SCO devices, update proper sample rate. If there is
+     * incoming stream over SCO, it will fetch proper device
+     * attributes due to call to updateSampleRate. This will
+     * cause unnecessary device switch if current device attributes
+     * are not updated properly. Also device sample rate for Voice
+     * usecase with APTX_AD_SPEECH and LC3_VOICE is hardcoded, so
+     * it won't cause any issues.
      */
-    if (ResourceManager::isXPANEnabled)
+    if (ResourceManager::isXPANEnabled && !rm->isBtScoDevice(deviceAttr.id))
         return;
 
     switch (codecFormat) {
@@ -970,7 +978,9 @@ start_pcm:
         ((codecFormat == CODEC_TYPE_LC3) &&
          (fbDevice.id == PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET ||
           fbDevice.id == PAL_DEVICE_OUT_BLUETOOTH_SCO ||
-          fbDevice.id == PAL_DEVICE_OUT_BLUETOOTH_BLE))) {
+          fbDevice.id == PAL_DEVICE_OUT_BLUETOOTH_BLE)) ||
+        ((codecFormat == CODEC_TYPE_APTX_AD_R4) &&
+         (fbDevice.id == PAL_DEVICE_OUT_BLUETOOTH_BLE))) {
         fbDev->isConfigured = true;
         fbDev->deviceStartStopCount++;
         fbDev->deviceCount++;
@@ -1065,10 +1075,12 @@ void Bluetooth::stopAbr()
         PAL_DBG(LOG_TAG, " deviceCount %d deviceStartStopCount %d for device id %d",
                 fbDev->deviceCount, fbDev->deviceStartStopCount, fbDev->deviceAttr.id);
     }
-    if ((codecFormat == CODEC_TYPE_LC3) &&
+    if ((((codecFormat == CODEC_TYPE_LC3) &&
         (deviceAttr.id == PAL_DEVICE_OUT_BLUETOOTH_SCO ||
          deviceAttr.id == PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET ||
-         deviceAttr.id == PAL_DEVICE_IN_BLUETOOTH_BLE) &&
+         deviceAttr.id == PAL_DEVICE_IN_BLUETOOTH_BLE)) ||
+        ((codecFormat == CODEC_TYPE_APTX_AD_R4) &&
+         (deviceAttr.id == PAL_DEVICE_IN_BLUETOOTH_BLE))) &&
          fbDev) {
         if ((fbDev->deviceStartStopCount > 0) &&
             (--fbDev->deviceStartStopCount == 0)) {
@@ -1694,6 +1706,7 @@ int BtA2dp::stopPlayback()
         a2dpState = A2DP_STATE_STOPPED;
         a2dpLatencyMode = AUDIO_LATENCY_MODE_FREE;
         codecInfo = NULL;
+        param_bt_a2dp.latency = 0;
 
         /* Reset isTwsMonoModeOn and isLC3MonoModeOn during stop */
         if (!param_bt_a2dp.a2dp_suspended) {
@@ -1768,7 +1781,7 @@ int BtA2dp::startCapture()
                 ret = audio_sink_start();
             }
 
-            PAL_ERR(LOG_TAG, "BT controller start capture return = %d",ret);
+            PAL_INFO(LOG_TAG, "BT controller start capture return = %d",ret);
             if (ret != 0 ) {
                 PAL_ERR(LOG_TAG, "BT controller start capture failed");
                 return ret;
@@ -1776,7 +1789,12 @@ int BtA2dp::startCapture()
 
             codecInfo = audio_get_dec_config((audio_format_t *)&codecFormat);
             if (codecInfo == NULL || codecFormat == CODEC_TYPE_INVALID) {
-                PAL_ERR(LOG_TAG, "invalid encoder config");
+                PAL_ERR(LOG_TAG, "invalid codec config");
+                if (audio_sink_stop_api) {
+                    audio_sink_stop_api(get_session_type());
+                } else {
+                    audio_sink_stop();
+                }
                 return -EINVAL;
             }
 
@@ -1785,7 +1803,12 @@ int BtA2dp::startCapture()
 
             ret = configureGraphModules();
             if (ret) {
-                PAL_DBG(LOG_TAG, "unable to configure DSP decoder");
+                PAL_ERR(LOG_TAG, "unable to configure DSP decoder");
+                if (audio_sink_stop_api) {
+                    audio_sink_stop_api(get_session_type());
+                } else {
+                    audio_sink_stop();
+                }
                 return ret;
             }
         }
@@ -1816,7 +1839,7 @@ int BtA2dp::startCapture()
                 ret = audio_sink_start();
             }
 
-            PAL_ERR(LOG_TAG, "BT controller start return = %d",ret);
+            PAL_INFO(LOG_TAG, "BT controller start return = %d",ret);
             if (ret != 0 ) {
                 PAL_ERR(LOG_TAG, "BT controller start failed");
                 return ret;
@@ -1830,6 +1853,11 @@ int BtA2dp::startCapture()
 
             if (codecInfo == NULL || codecFormat == CODEC_TYPE_INVALID) {
                 PAL_ERR(LOG_TAG, "invalid codec config");
+                if (audio_sink_stop_api) {
+                    audio_sink_stop_api(get_session_type());
+                } else {
+                    audio_sink_stop();
+                }
                 return -EINVAL;
             }
 
@@ -1838,7 +1866,12 @@ int BtA2dp::startCapture()
 
             ret = configureGraphModules();
             if (ret) {
-                PAL_DBG(LOG_TAG, "unable to configure DSP decoder");
+                PAL_ERR(LOG_TAG, "unable to configure DSP decoder");
+                if (audio_sink_stop_api) {
+                    audio_sink_stop_api(get_session_type());
+                } else {
+                    audio_sink_stop();
+                }
                 return ret;
             }
         }
@@ -1846,7 +1879,12 @@ int BtA2dp::startCapture()
 
     if (!isDummySink) {
         if (!a2dp_send_sink_setup_complete()) {
-            PAL_DBG(LOG_TAG, "sink_setup_complete not successful");
+            PAL_ERR(LOG_TAG, "sink_setup_complete not successful");
+            if (audio_sink_stop_api) {
+                audio_sink_stop_api(get_session_type());
+            } else {
+                audio_sink_stop();
+            }
             ret = -ETIMEDOUT;
         }
     }
@@ -1891,6 +1929,8 @@ int BtA2dp::stopCapture()
         // It can be in A2DP_STATE_DISCONNECTED, if device disconnect happens prior to Stop.
         if (a2dpState == A2DP_STATE_STARTED)
             a2dpState = A2DP_STATE_STOPPED;
+
+        param_bt_a2dp.latency = 0;
 
         if (pluginCodec) {
             pluginCodec->close_plugin(pluginCodec);
@@ -2211,7 +2251,8 @@ int32_t BtA2dp::getDeviceParameter(uint32_t param_id, void **param)
     {
         uint32_t slatency = 0;
 
-        if (a2dpState == A2DP_STATE_STARTED && totalActiveSessionRequests) {
+        if (a2dpState == A2DP_STATE_STARTED && totalActiveSessionRequests &&
+            ((param_bt_a2dp.latency == 0) || (codecFormat == CODEC_TYPE_APTX_AD))) {
             if (audio_sink_get_a2dp_latency_api) {
                 slatency = audio_sink_get_a2dp_latency_api(get_session_type());
             } else if (audio_sink_get_a2dp_latency) {
@@ -2224,11 +2265,7 @@ int32_t BtA2dp::getDeviceParameter(uint32_t param_id, void **param)
     }
     case PAL_PARAM_ID_BT_A2DP_FORCE_SWITCH:
     {
-        if (param_bt_a2dp.reconfig ||
-            ((a2dpState != A2DP_STATE_STARTED) && (param_bt_a2dp.a2dp_suspended == true))) {
-            param_bt_a2dp.is_force_switch = true;
-            PAL_DBG(LOG_TAG, "a2dp reconfig or a2dp suspended/a2dpState is not started");
-        } else if (totalActiveSessionRequests == 0) {
+        if (totalActiveSessionRequests == 0 && deviceStartStopCount) {
             param_bt_a2dp.is_force_switch = true;
             PAL_DBG(LOG_TAG, "Force BT device switch for no total active BT sessions");
         } else {

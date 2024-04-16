@@ -944,6 +944,7 @@ int SessionAlsaPcm::start(Stream * s)
     int DeviceId;
     struct disable_lpm_info lpm_info = {};
     bool isStreamAvail = false;
+    bool us_notify_format = false;
 
     PAL_DBG(LOG_TAG, "Enter");
 
@@ -1260,7 +1261,7 @@ int SessionAlsaPcm::start(Stream * s)
                                                txAifBackEnds[0].second.data(), DEVICE_MFC, &miid);
                     if (status != 0) {
                         PAL_ERR(LOG_TAG,"getModuleInstanceId failed\n");
-                        goto set_mixer;
+                        goto configure_pspfmfc;
                     }
                     PAL_INFO(LOG_TAG, "miid : %x id = %d\n", miid, pcmDevIds.at(0));
                     status = s->getAssociatedDevices(associatedDevices);
@@ -1294,6 +1295,29 @@ int SessionAlsaPcm::start(Stream * s)
                                 goto set_mixer;
                             }
                         }
+                    }
+                }
+
+configure_pspfmfc:
+                status = s->getAssociatedDevices(associatedDevices);
+                if (0 != status) {
+                    PAL_ERR(LOG_TAG,"getAssociatedDevices Failed\n");
+                    goto set_mixer;
+                }
+                if (associatedDevices.size() < 1) {
+                    PAL_ERR(LOG_TAG,"no device present\n");
+                    goto set_mixer;
+                }
+                status = associatedDevices[0]->getDeviceAttributes(&dAttr);
+                if (0 != status) {
+                    PAL_ERR(LOG_TAG,"get Device Attributes Failed\n");
+                    goto set_mixer;
+                }
+                if (dAttr.id == PAL_DEVICE_IN_PROXY || dAttr.id == PAL_DEVICE_IN_RECORD_PROXY) {
+                    status = configureMFC(rm, sAttr, dAttr, pcmDevIds,
+                    txAifBackEnds[0].second.data());
+                    if(status != 0) {
+                         PAL_ERR(LOG_TAG, "configure MFC failed");
                     }
                 }
 
@@ -1838,8 +1862,27 @@ set_mixer:
                 }
             }
 pcm_start:
-            if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
-                dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+            if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER) {
+                if (rm->activeGroupDevConfig) {
+                    if ((dAttr.config.sample_rate !=
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate) ||
+                        (dAttr.config.ch_info.channels !=
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.channels) ||
+                        (dAttr.config.bit_width != ResourceManager::palFormatToBitwidthLookup(
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.aud_fmt_id))) {
+                         us_notify_format = true;
+                         dAttr.config.sample_rate =
+                             rm->currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate;
+                         dAttr.config.ch_info.channels =
+                             rm->currentGroupDevConfig.grp_dev_hwep_cfg.channels;
+                         dAttr.config.bit_width = ResourceManager::palFormatToBitwidthLookup(
+                             rm->currentGroupDevConfig.grp_dev_hwep_cfg.aud_fmt_id);
+                    }
+                } else if (dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+                    us_notify_format = true;
+                }
+            }
+            if (us_notify_format) {
                 status = notifyUPDToneRendererFmtChng(&dAttr,
                             US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_START);
                 if (status) {
@@ -1873,8 +1916,7 @@ pcm_start:
                     status = errno;
                     PAL_ERR(LOG_TAG, "pcm_start failed %d", status);
                 } else {
-                    if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER &&
-                        dAttr.id != PAL_DEVICE_OUT_ULTRASOUND_DEDICATED) {
+                    if (us_notify_format) {
                         status = notifyUPDToneRendererFmtChng(&dAttr,
                                     US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_DONE);
                         if (status) {
@@ -2398,6 +2440,7 @@ int SessionAlsaPcm::disconnectSessionDevice(Stream *streamHandle,
     struct pal_device dAttr = {};
     std::vector<std::pair<int32_t, std::string>> rxAifBackEndsToDisconnect;
     std::vector<std::pair<int32_t, std::string>> txAifBackEndsToDisconnect;
+    struct pal_stream_attributes sAttr = {};
     int32_t status = 0;
 
     deviceList.push_back(deviceToDisconnect);
@@ -2411,13 +2454,21 @@ int SessionAlsaPcm::disconnectSessionDevice(Stream *streamHandle,
         if (status) {
             PAL_ERR(LOG_TAG, "Error notifying Ultrasound tone renderer "
                     "format change START. status = %d", status);
+        } else {
+            /*sleep for 20ms to wait for EOS propagation to HWEP*/
+            usleep(20000);
         }
     }
 
+    status = streamHandle->getStreamAttributes(&sAttr);
+    if (0 != status) {
+        PAL_ERR(LOG_TAG, "getStreamAttributes Failed \n");
+    }
     if (!rxAifBackEndsToDisconnect.empty()) {
         int cnt = 0;
-        if (streamType != PAL_STREAM_ULTRASOUND &&
-            streamType != PAL_STREAM_LOOPBACK)
+        if ((streamType != PAL_STREAM_ULTRASOUND &&
+            streamType != PAL_STREAM_LOOPBACK) || (streamType == PAL_STREAM_LOOPBACK &&
+            sAttr.info.opt_stream_info.loopback_type == PAL_STREAM_LOOPBACK_PLAYBACK_ONLY))
             status = SessionAlsaUtils::disconnectSessionDevice(streamHandle, streamType, rm,
                      dAttr, (pcmDevIds.size() ? pcmDevIds : pcmDevRxIds), rxAifBackEndsToDisconnect);
         else {
@@ -2508,6 +2559,7 @@ int SessionAlsaPcm::connectSessionDevice(Stream* streamHandle, pal_stream_type_t
     struct pal_device dAttr = {};
     std::vector<std::pair<int32_t, std::string>> rxAifBackEndsToConnect;
     std::vector<std::pair<int32_t, std::string>> txAifBackEndsToConnect;
+    struct pal_stream_attributes sAttr = {};
     int32_t status = 0;
 
     deviceList.push_back(deviceToConnect);
@@ -2515,12 +2567,17 @@ int SessionAlsaPcm::connectSessionDevice(Stream* streamHandle, pal_stream_type_t
             txAifBackEndsToConnect);
     deviceToConnect->getDeviceAttributes(&dAttr);
 
+    status = streamHandle->getStreamAttributes(&sAttr);
+    if (0 != status) {
+        PAL_ERR(LOG_TAG, "getStreamAttributes Failed \n");
+    }
     if (!rxAifBackEndsToConnect.empty()) {
         for (const auto &elem : rxAifBackEndsToConnect)
             rxAifBackEnds.push_back(elem);
 
-        if (streamType != PAL_STREAM_ULTRASOUND &&
-            streamType != PAL_STREAM_LOOPBACK)
+        if ((streamType != PAL_STREAM_ULTRASOUND &&
+            streamType != PAL_STREAM_LOOPBACK) || (streamType == PAL_STREAM_LOOPBACK &&
+            sAttr.info.opt_stream_info.loopback_type == PAL_STREAM_LOOPBACK_PLAYBACK_ONLY))
             status = SessionAlsaUtils::connectSessionDevice(this, streamHandle, streamType, rm,
                      dAttr, (pcmDevIds.size() ? pcmDevIds : pcmDevRxIds), rxAifBackEndsToConnect);
         else
@@ -2543,6 +2600,15 @@ int SessionAlsaPcm::connectSessionDevice(Stream* streamHandle, pal_stream_type_t
             }
         } else {
             if (streamType == PAL_STREAM_SENSOR_PCM_RENDERER) {
+                // update sr/ch/bw in dAttr if virtual port is enabled
+                if (rm->activeGroupDevConfig) {
+                    dAttr.config.sample_rate =
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate;
+                    dAttr.config.ch_info.channels =
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.channels;
+                    dAttr.config.bit_width = ResourceManager::palFormatToBitwidthLookup(
+                         rm->currentGroupDevConfig.grp_dev_hwep_cfg.aud_fmt_id);
+                }
                 status = notifyUPDToneRendererFmtChng(&dAttr,
                             US_TONE_RENDERER_EP_MEDIA_FORMAT_INFO_CHANGE_DONE);
                 if (status) {

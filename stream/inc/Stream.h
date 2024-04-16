@@ -150,6 +150,7 @@ typedef enum {
 #define HANDSET_PROT_ENABLE 48
 #define HAPTICS_VI_ENABLE 49
 #define HAPTICS_PROT_ENABLE 50
+#define CRS_CALL_VOLUME 51
 #define INVALID_TAG -1
 
 /* This sleep is added to give time to kernel and

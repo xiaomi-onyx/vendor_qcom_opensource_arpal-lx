@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include "PalCallback.h"
@@ -22,6 +22,18 @@ void DataTransferThread::startTransfer(int eventId) {
 
         const PalCallbackBuffer *rwDonePayload = (PalCallbackBuffer *)&mBuffer[0];
         auto cbBuffer = std::make_unique<pal_callback_buffer>();
+        auto bufTimeSpec = std::make_unique<timespec>();
+        if (!bufTimeSpec) {
+            ALOGE("%s: Failed to allocate memory for timespec", __func__);
+            return;
+        }
+        cbBuffer.get()->ts = (timespec *)bufTimeSpec.get();
+
+        std::vector<uint8_t> buffData;
+        cbBuffer->size = rwDonePayload->size;
+        if (cbBuffer->size > 0 && rwDonePayload->buffer.size() == cbBuffer->size)
+            buffData.resize(cbBuffer->size);
+        cbBuffer->buffer = buffData.data();
         AidlToLegacy::convertPalCallbackBuffer(rwDonePayload, cbBuffer.get());
         mStreamCallback((pal_stream_handle_t *)mStreamHandle, eventId, (uint32_t *)cbBuffer.get(),
                         (uint32_t)availToRead, mStreamCookie);

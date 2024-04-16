@@ -28,8 +28,8 @@
  */
 
 /*
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 
 Redistribution and use in source and binary forms, with or without
@@ -85,6 +85,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define NUM_OF_CAL_KEYS 3
 #define MAX_RETRY 3
+#define POP_SUPPRESSOR_RAMP_DELAY (1*1000)
 
 static uint32_t retries = 0;
 
@@ -943,7 +944,11 @@ int SessionAlsaVoice::start(Stream * s)
         s->setVolume(volume);
     };
     /*call to apply volume*/
-    setConfig(s, CALIBRATION, TAG_STREAM_VOLUME, RX_HOSTLESS);
+    if (rm->isCRSCallEnabled) {
+        setConfig(s, MODULE, CRS_CALL_VOLUME, RX_HOSTLESS);
+    } else {
+        setConfig(s, CALIBRATION, TAG_STREAM_VOLUME, RX_HOSTLESS);
+    }
 
     /*set tty mode*/
     if (ttyMode) {
@@ -1098,6 +1103,10 @@ int SessionAlsaVoice::stop(Stream * s)
             }
         }
     }
+    /*config mute on pop suppressor*/
+    setPopSuppressorMute(s);
+    usleep(POP_SUPPRESSOR_RAMP_DELAY);
+
     if (pcmRx) {
         status = pcm_stop(pcmRx);
         if (status) {
@@ -1365,6 +1374,15 @@ int SessionAlsaVoice::setConfig(Stream * s, configType type, int tag)
               status = -EINVAL;
             }
             break;
+        case CRS_CALL_VOLUME:
+            if (pcmDevRxIds.size()) {
+               device = pcmDevRxIds.at(0);
+               status = payloadTaged(s, type, tag, device, RX_HOSTLESS);
+            } else {
+               PAL_ERR(LOG_TAG, "pcmDevRxIds is not available.");
+               status = -EINVAL;
+            }
+            break;
         default:
             PAL_ERR(LOG_TAG,"Failed unsupported tag type %d", static_cast<uint32_t>(tag));
             status = -EINVAL;
@@ -1444,7 +1462,6 @@ int SessionAlsaVoice::setConfig(Stream * s, configType type __unused, int tag, i
                         status);
                 goto exit;
             }
-
             break;
 
         case CHANNEL_INFO:
@@ -1464,7 +1481,16 @@ int SessionAlsaVoice::setConfig(Stream * s, configType type __unused, int tag, i
                 PAL_ERR(LOG_TAG, "failed to get payload status %d", status);
                 goto exit;
             }
+            break;
 
+        case CRS_CALL_VOLUME:
+            if (pcmDevRxIds.size()) {
+               device = pcmDevRxIds.at(0);
+               status = payloadTaged(s, type, tag, device, RX_HOSTLESS);
+            } else {
+               PAL_ERR(LOG_TAG, "pcmDevRxIds is not available.");
+               status = -EINVAL;
+            }
             break;
 
         default:
@@ -1862,6 +1888,7 @@ int SessionAlsaVoice::disconnectSessionDevice(Stream *streamHandle,
     if (rxAifBackEnds.size() > 0) {
         /*config mute on pop suppressor*/
         setPopSuppressorMute(streamHandle);
+        usleep(POP_SUPPRESSOR_RAMP_DELAY);
 
         /*if HW sidetone is enable disable it */
         if (sideTone_cnt > 0) {
