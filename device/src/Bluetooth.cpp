@@ -2364,7 +2364,7 @@ BtA2dp::getInstance(struct pal_device *device, std::shared_ptr<ResourceManager> 
 std::shared_ptr<Device> BtSco::objRx = nullptr;
 std::shared_ptr<Device> BtSco::objTx = nullptr;
 bool BtSco::isScoOn = false;
-bool BtSco::isWbSpeechEnabled = false;
+bool BtSco::isWbSpeechEnabled = true;
 int  BtSco::swbSpeechMode = SPEECH_MODE_INVALID;
 bool BtSco::isSwbLc3Enabled = false;
 audio_lc3_codec_cfg_t BtSco::lc3CodecInfo = {};
