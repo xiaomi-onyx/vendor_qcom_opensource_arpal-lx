@@ -2424,10 +2424,12 @@ int SessionAlsaUtils::connectSessionDevice(Session* sess, Stream* streamHandle, 
                 status = -EINVAL;
                 goto exit;
             }
-            if (SessionAlsaUtils::isRxDevice(aifBackEndsToConnect[0].first)) {
-                voiceSession->setSessionParameters(streamHandle, RX_HOSTLESS);
-            } else {
-                voiceSession->setSessionParameters(streamHandle, TX_HOSTLESS);
+            if (streamHandle->getCurState() != STREAM_INIT) {
+                if (SessionAlsaUtils::isRxDevice(aifBackEndsToConnect[0].first)) {
+                    voiceSession->setSessionParameters(streamHandle, RX_HOSTLESS);
+                } else {
+                    voiceSession->setSessionParameters(streamHandle, TX_HOSTLESS);
+               }
             }
         } else {
             PAL_ERR(LOG_TAG, "invalid session voice object");
