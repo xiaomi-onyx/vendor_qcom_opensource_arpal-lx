@@ -13720,17 +13720,27 @@ bool ResourceManager::doDevAttrDiffer(struct pal_device *inDevAttr,
     if (ResourceManager::activeGroupDevConfig &&
             (inDevAttr->id == PAL_DEVICE_OUT_SPEAKER ||
              inDevAttr->id == PAL_DEVICE_OUT_HANDSET)) {
-        if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate !=
+        uint32_t in_sample_rate = 0;
+        uint32_t in_channels  = 0;
+        if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate == 0)
+            in_sample_rate = inDevAttr->config.sample_rate;
+        else
+            in_sample_rate = ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate;
+        if (in_sample_rate !=
             ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate) {
             PAL_DBG(LOG_TAG, "found diff sample rate %d, running dev has %d, device switch needed",
-                    ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate,
+                    in_sample_rate,
                     ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate);
             ret = true;
         }
-        if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels !=
+        if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels == 0)
+            in_channels = inDevAttr->config.ch_info.channels;
+        else
+            in_channels = ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels;
+        if (in_channels !=
             ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.channels) {
             PAL_DBG(LOG_TAG, "found diff channel %d, running dev has %d, device switch needed",
-                    ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels,
+                    in_channels,
                     ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.channels);
             ret = true;
         }

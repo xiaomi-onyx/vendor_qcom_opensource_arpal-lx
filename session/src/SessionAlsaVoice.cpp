@@ -825,8 +825,8 @@ int SessionAlsaVoice::setTaggedSlotMask(Stream * s)
         status = -EINVAL;
         return status;
     }
-    if (rm->isDeviceMuxConfigEnabled && (dAttr.id == PAL_DEVICE_OUT_SPEAKER ||
-         dAttr.id == PAL_DEVICE_OUT_HANDSET)) {
+    if ((rm->isDeviceMuxConfigEnabled || rm->isUPDVirtualPortEnabled) &&
+        (dAttr.id == PAL_DEVICE_OUT_SPEAKER ||dAttr.id == PAL_DEVICE_OUT_HANDSET)) {
          setSlotMask(rm, sAttr, dAttr, pcmDevRxIds);
     }
 
@@ -1993,6 +1993,7 @@ int SessionAlsaVoice::connectSessionDevice(Stream* streamHandle,
     deviceToConnect->getDeviceAttributes(&dAttr);
 
     if (rxAifBackEnds.size() > 0) {
+        setTaggedSlotMask(streamHandle);
         status =  SessionAlsaUtils::connectSessionDevice(this, streamHandle,
                                                          streamType, rm,
                                                          dAttr, pcmDevRxIds,
