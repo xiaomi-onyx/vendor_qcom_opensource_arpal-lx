@@ -31,9 +31,10 @@ void DataTransferThread::startTransfer(int eventId) {
 
         std::vector<uint8_t> buffData;
         cbBuffer->size = rwDonePayload->size;
-        if (cbBuffer->size > 0 && rwDonePayload->buffer.size() == cbBuffer->size)
+        if (cbBuffer->size > 0 && rwDonePayload->buffer.size() == cbBuffer->size) {
             buffData.resize(cbBuffer->size);
-        cbBuffer->buffer = buffData.data();
+            cbBuffer->buffer = buffData.data();
+        }
         AidlToLegacy::convertPalCallbackBuffer(rwDonePayload, cbBuffer.get());
         mStreamCallback((pal_stream_handle_t *)mStreamHandle, eventId, (uint32_t *)cbBuffer.get(),
                         (uint32_t)availToRead, mStreamCookie);
