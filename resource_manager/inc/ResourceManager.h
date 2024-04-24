@@ -961,6 +961,7 @@ public:
     static void processCardInfo(struct xml_userdata *data, const XML_Char *tag_name);
     static void processSpkrTempCtrls(const XML_Char **attr);
     static void processBTCodecInfo(const XML_Char **attr, const int attr_count);
+    static void processPerfLockConfig(const XML_Char **attr);
     static void startTag(void *userdata __unused, const XML_Char *tag_name, const XML_Char **attr);
     static void snd_data_handler(void *userdata, const XML_Char *s, int len);
     static void processDeviceIdProp(struct xml_userdata *data, const XML_Char *tag_name);

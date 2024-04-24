@@ -49,6 +49,7 @@
 #include "ResourceManager.h"
 #include "PalCommon.h"
 #include "mem_logger.h"
+#include "PerfLock.h"
 class Stream;
 
 /**
@@ -178,6 +179,7 @@ int32_t pal_stream_open(struct pal_stream_attributes *attributes,
                         pal_stream_callback cb, uint64_t cookie,
                         pal_stream_handle_t **stream_handle)
 {
+    PerfLock perflock(__func__);
     ATRACE_CALL();
     uint64_t *stream = NULL;
     Stream *s = NULL;
@@ -305,6 +307,7 @@ exit:
 
 int32_t pal_stream_start(pal_stream_handle_t *stream_handle)
 {
+    PerfLock perflock(__func__);
     ATRACE_CALL();
     Stream *s = NULL;
     struct pal_stream_attributes sAttr = {};
