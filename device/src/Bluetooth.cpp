@@ -81,7 +81,7 @@ int Bluetooth::updateDeviceMetadata()
     std::vector <std::pair<int, int>> keyVector;
     struct mixer_ctl *ctrl = NULL;
 
-    if (ResourceManager::isXPANEnabled) {
+    if (ResourceManager::isCPEnabled) {
         ctrl = mixer_get_ctl_by_name(hwMixerHandle,
                                      MIXER_SET_CODEC_TYPE);
         if (!ctrl) {
@@ -125,7 +125,7 @@ void Bluetooth::updateDeviceAttributes()
      * usecase with APTX_AD_SPEECH and LC3_VOICE is hardcoded, so
      * it won't cause any issues.
      */
-    if (ResourceManager::isXPANEnabled && !rm->isBtScoDevice(deviceAttr.id))
+    if (ResourceManager::isCPEnabled && !rm->isBtScoDevice(deviceAttr.id))
         return;
 
     switch (codecFormat) {
@@ -253,7 +253,7 @@ int Bluetooth::configureCOPModule(int32_t pcmId, const char *backendName, uint32
     uint32_t miid = 0;
     int status = 0;
 
-    if ((tagId == COP_PACKETIZER_V0) && ResourceManager::isXPANEnabled)
+    if ((tagId == COP_PACKETIZER_V0) && ResourceManager::isCPEnabled)
         return status;
 
     status = SessionAlsaUtils::getModuleInstanceId(virtualMixerHandle,
@@ -295,7 +295,7 @@ int Bluetooth::configureCOPModule(int32_t pcmId, const char *backendName, uint32
             break;
         [[fallthrough]];
     case COP_PACKETIZER_V0:
-        if (ResourceManager::isXPANEnabled)
+        if (ResourceManager::isCPEnabled)
             break;
 
         // PARAM_ID_COP_PACKETIZER_OUTPUT_MEDIA_FORMAT
