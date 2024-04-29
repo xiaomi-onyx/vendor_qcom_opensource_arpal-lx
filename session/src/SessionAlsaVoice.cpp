@@ -1887,8 +1887,10 @@ int SessionAlsaVoice::disconnectSessionDevice(Stream *streamHandle,
 
     if (rxAifBackEnds.size() > 0) {
         /*config mute on pop suppressor*/
-        setPopSuppressorMute(streamHandle);
-        usleep(POP_SUPPRESSOR_RAMP_DELAY);
+        if (streamHandle->getCurState() != STREAM_INIT) {
+            setPopSuppressorMute(streamHandle);
+            usleep(POP_SUPPRESSOR_RAMP_DELAY);
+        }
 
         /*if HW sidetone is enable disable it */
         if (sideTone_cnt > 0) {
