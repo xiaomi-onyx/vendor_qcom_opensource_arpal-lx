@@ -1653,8 +1653,6 @@ int32_t SoundTriggerEngineGsl::ConnectSessionDevice(
     if (dev_disconnect_count_ == 0)
         status = session_->connectSessionDevice(stream_handle, stream_type,
                                             device_to_connect);
-    if (status != 0)
-        dev_disconnect_count_++;
 
     PAL_DBG(LOG_TAG, "dev_disconnect_count_: %d", dev_disconnect_count_);
     return status;
@@ -1672,8 +1670,6 @@ int32_t SoundTriggerEngineGsl::DisconnectSessionDevice(
     if (dev_disconnect_count_ == eng_streams_.size())
         status = session_->disconnectSessionDevice(stream_handle, stream_type,
                                                device_to_disconnect);
-    if (status != 0)
-        dev_disconnect_count_--;
     if (device_switch_event)
         device_switch_stream_ = stream_handle;
 
@@ -1695,8 +1691,6 @@ int32_t SoundTriggerEngineGsl::SetupSessionDevice(
     if (dev_disconnect_count_ == 0)
         status = session_->setupSessionDevice(stream_handle, stream_type,
                                           device_to_disconnect);
-    if (status != 0)
-        dev_disconnect_count_++;
 
     PAL_DBG(LOG_TAG, "dev_disconnect_count_: %d", dev_disconnect_count_);
     return status;
