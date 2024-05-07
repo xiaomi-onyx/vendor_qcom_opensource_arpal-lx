@@ -505,7 +505,9 @@ int32_t StreamSoundTrigger::getParameters(uint32_t param_id, void **payload) {
         }
 
         if (mDevices.size() > 0 && !device_opened_) {
+            rm->voteSleepMonitor(this, true);
             status = mDevices[0]->open();
+            rm->voteSleepMonitor(this, false);
             if (0 != status) {
                 PAL_ERR(LOG_TAG, "Device open failed, status %d", status);
                 return status;
@@ -2358,7 +2360,14 @@ int32_t StreamSoundTrigger::StLoaded::ProcessEvent(
                 }
 
                 if (!st_stream_.device_opened_) {
+                    /*
+                     * clock voting is happening during mixer control
+                     * enablement, need to have sleep monitor voted in
+                     * this duration to avoid ADSP sleep issue.
+                     */
+                    st_stream_.rm->voteSleepMonitor(&st_stream_, true);
                     status = dev->open();
+                    st_stream_.rm->voteSleepMonitor(&st_stream_, false);
                     if (0 != status) {
                         PAL_ERR(LOG_TAG, "Device open failed, status %d", status);
                         break;
@@ -2487,7 +2496,9 @@ int32_t StreamSoundTrigger::StLoaded::ProcessEvent(
             }
 
             if (!st_stream_.device_opened_) {
+                st_stream_.rm->voteSleepMonitor(&st_stream_, true);
                 status = dev->open();
+                st_stream_.rm->voteSleepMonitor(&st_stream_, false);
                 if (0 != status) {
                     PAL_ERR(LOG_TAG, "device %d open failed with status %d",
                         dev->getSndDeviceId(), status);
@@ -2906,7 +2917,9 @@ int32_t StreamSoundTrigger::StActive::ProcessEvent(
             }
 
             if (!st_stream_.device_opened_) {
+                st_stream_.rm->voteSleepMonitor(&st_stream_, true);
                 status = dev->open();
+                st_stream_.rm->voteSleepMonitor(&st_stream_, false);
                 if (0 != status) {
                     PAL_ERR(LOG_TAG, "device %d open failed with status %d",
                         dev->getSndDeviceId(), status);
@@ -3875,7 +3888,9 @@ int32_t StreamSoundTrigger::ConnectEvent(
     }
 
     if (!device_opened_) {
+        rm->voteSleepMonitor(this, true);
         status = dev->open();
+        rm->voteSleepMonitor(this, false);
         if (0 != status) {
             PAL_ERR(LOG_TAG, "device %d open failed with status %d",
                     dev->getSndDeviceId(), status);
