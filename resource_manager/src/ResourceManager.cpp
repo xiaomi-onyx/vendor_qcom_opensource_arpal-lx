@@ -543,7 +543,7 @@ bool ResourceManager::isUpdDedicatedBeEnabled = false;
 bool ResourceManager::isDeviceMuxConfigEnabled = false;
 bool ResourceManager::isUpdDutyCycleEnabled = false;
 bool ResourceManager::isUPDVirtualPortEnabled = false;
-bool ResourceManager::isXPANEnabled = false;
+bool ResourceManager::isCPEnabled = false;
 bool ResourceManager::isDummyDevEnabled = false;
 bool ResourceManager::isProxyRecordActive = false;
 int ResourceManager::max_voice_vol = -1;     /* Variable to store max volume index for voice call */
@@ -8677,7 +8677,7 @@ int ResourceManager::setConfigParams(struct str_parms *parms)
     ret = setMuxconfigEnableParam(parms, value, len);
     ret = setUpdDutyCycleEnableParam(parms, value, len);
     ret = setUpdVirtualPortParam(parms, value, len);
-    setXPANEnableParam(parms, value, len);
+    setConnectivityProxyEnableParam(parms, value, len);
     setDummyDevEnableParam(parms, value, len);
 
     ret = setHapticsPriorityParam(parms, value, len);
@@ -8890,22 +8890,22 @@ int ResourceManager::setUpdVirtualPortParam(struct str_parms *parms, char *value
     return ret;
 }
 
-void ResourceManager::setXPANEnableParam(struct str_parms *parms, char *value, int len)
+void ResourceManager::setConnectivityProxyEnableParam(struct str_parms *parms, char *value, int len)
 {
     int ret = -EINVAL;
 
     if (!value || !parms)
         return;
 
-    ret = str_parms_get_str(parms, "xpan_enabled",
+    ret = str_parms_get_str(parms, "connectivity_proxy_enabled",
                             value, len);
     PAL_VERBOSE(LOG_TAG," value %s", value);
 
     if (ret >= 0) {
         if (value && !strncmp(value, "true", sizeof("true")))
-            ResourceManager::isXPANEnabled = true;
+            ResourceManager::isCPEnabled = true;
 
-        str_parms_del(parms, "xpan_enabled");
+        str_parms_del(parms, "connectivity_proxy_enabled");
     }
 }
 

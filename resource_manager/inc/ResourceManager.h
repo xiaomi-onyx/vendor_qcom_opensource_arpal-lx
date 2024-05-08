@@ -660,7 +660,7 @@ public:
     static bool isDeviceMuxConfigEnabled;
     static bool isUHQAEnabled;
     static bool isSignalHandlerEnabled;
-    static bool isXPANEnabled;
+    static bool isCPEnabled;
     static bool isCRSCallEnabled;
     static bool isDummyDevEnabled;
     static bool isProxyRecordActive;
@@ -982,7 +982,7 @@ public:
     static int setMuxconfigEnableParam(struct str_parms *parms,char *value, int len);
     static int setHapticsPriorityParam(struct str_parms *parms,char *value, int len);
     static int setHapticsDrivenParam(struct str_parms *parms,char *value, int len);
-    static void setXPANEnableParam(struct str_parms *parms,char *value, int len);
+    static void setConnectivityProxyEnableParam(struct str_parms *parms,char *value, int len);
     static void setDummyDevEnableParam(struct str_parms *parms,char *value, int len);
     static bool isLpiLoggingEnabled();
     static void processConfigParams(const XML_Char **attr);
