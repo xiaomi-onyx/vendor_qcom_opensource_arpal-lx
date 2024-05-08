@@ -2395,12 +2395,12 @@ void PayloadBuilder::payloadCopV2StreamInfo(uint8_t **payload, size_t *size,
         else
             streamMapSize = bleCfg->enc_cfg.stream_map_size;
         payloadSize = sizeof(struct apm_module_param_data_t) +
-                      sizeof(struct param_id_cop_pack_output_media_fmt_t) +
+                      sizeof(struct param_id_cop_v2_stream_info_t) +
                       sizeof(struct cop_v2_stream_info_map_t) * streamMapSize;
     } else if (isStreamMapDirIn && bleCfg->dec_cfg.stream_map_size != 0) {
         streamMapSize = bleCfg->dec_cfg.stream_map_size;
         payloadSize = sizeof(struct apm_module_param_data_t) +
-                      sizeof(struct param_id_cop_pack_output_media_fmt_t) +
+                      sizeof(struct param_id_cop_v2_stream_info_t) +
                       sizeof(struct cop_v2_stream_info_map_t) * streamMapSize;
     } else if (isStreamMapDirIn && bleCfg->dec_cfg.stream_map_size == 0) {
         PAL_ERR(LOG_TAG, "isStreamMapDirIn is true, but empty streamMapIn");
