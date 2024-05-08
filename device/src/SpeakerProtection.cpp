@@ -79,7 +79,7 @@
 #endif
 #define FEEDBACK_MONO_1 "-mono-1"
 
-#define MIN_SPKR_IDLE_SEC (60 * 30)
+#define MIN_SPKR_IDLE_SEC (60 * 3)
 #define WAKEUP_MIN_IDLE_CHECK (1000 * 30)
 
 #define SPKR_RIGHT_WSA_TEMP "SpkrRight WSA Temp"
