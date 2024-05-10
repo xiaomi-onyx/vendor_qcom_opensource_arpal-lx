@@ -688,6 +688,7 @@ public:
     /* Variable to store which speaker side is being used for call audio.
      * Valid for Stereo case only
      */
+    static pal_audio_event_callback callback_event;
     static bool isMainSpeakerRight;
     /* Variable to store Quick calibration time for Speaker protection */
     static int spQuickCalTime;
