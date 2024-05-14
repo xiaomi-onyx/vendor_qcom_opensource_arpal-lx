@@ -189,6 +189,8 @@ typedef enum {
     ST_HANDLE_CONNECT_DEVICE,
     ST_HANDLE_DISCONNECT_DEVICE,
     ST_HANDLE_CHARGING_STATE,
+    ST_INTERNAL_PAUSE,
+    ST_INTERNAL_RESUME,
 } st_action;
 
 typedef enum

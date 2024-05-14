@@ -266,7 +266,7 @@ int32_t StreamACD::stop()
     return status;
 }
 
-int32_t StreamACD::Resume() {
+int32_t StreamACD::Resume(bool is_internal) {
     int32_t status = 0;
 
     PAL_DBG(LOG_TAG, "Enter");
@@ -281,7 +281,7 @@ int32_t StreamACD::Resume() {
     return status;
 }
 
-int32_t StreamACD::Pause() {
+int32_t StreamACD::Pause(bool is_internal) {
     int32_t status = 0;
 
     PAL_DBG(LOG_TAG, "Enter");

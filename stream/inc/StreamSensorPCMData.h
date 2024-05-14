@@ -56,8 +56,8 @@ public:
     int32_t start() override;
     int32_t stop() override;
     int32_t close() override;
-    int32_t Resume() override;
-    int32_t Pause() override;
+    int32_t Resume(bool is_internal __unused) override;
+    int32_t Pause(bool is_internal __unused) override;
     int32_t HandleConcurrentStream(bool active) override;
     int32_t DisconnectDevice(pal_device_id_t device_id) override;
     int32_t ConnectDevice(pal_device_id_t device_id) override;

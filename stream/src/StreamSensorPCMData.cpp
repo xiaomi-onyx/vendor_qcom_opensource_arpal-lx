@@ -325,7 +325,7 @@ int32_t StreamSensorPCMData::stop()
     return status;
 }
 
-int32_t StreamSensorPCMData::Resume()
+int32_t StreamSensorPCMData::Resume(bool is_internal)
 {
     int32_t status = 0;
 
@@ -340,7 +340,7 @@ int32_t StreamSensorPCMData::Resume()
     return status;
 }
 
-int32_t StreamSensorPCMData::Pause()
+int32_t StreamSensorPCMData::Pause(bool is_internal)
 {
     int32_t status = 0;
 
