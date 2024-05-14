@@ -78,6 +78,8 @@
 #include "VUIInterfaceProxy.h"
 #include "kvh2xml.h"
 
+#include "PerfLock.h"
+
 #ifndef FEATURE_IPQ_OPENWRT
 #include <cutils/str_parms.h>
 #endif
@@ -12409,6 +12411,35 @@ uint32_t ResourceManager::getBtSlimClockSrc(uint32_t codecFormat)
     return CLOCK_SRC_DEFAULT;
 }
 
+void ResourceManager::processPerfLockConfig(const XML_Char **attr)
+{
+    if (strcmp(attr[0], "library") != 0) {
+        PAL_ERR(LOG_TAG,"'library' not found");
+        return;
+    }
+
+    if (strcmp(attr[2], "config") != 0) {
+        PAL_ERR(LOG_TAG,"'config' not found");
+        return;
+    }
+    PerfLockConfig perfConfig;
+    perfConfig.libraryName = std::string(attr[1]);
+
+    std::string config = std::string(attr[3]);
+    std::vector<int> perfLockConfigs;
+    size_t pos = 0;
+    while ((pos = config.find(',')) != std::string::npos) {
+        std::string token = config.substr(0, pos);
+        perfLockConfigs.push_back(convertCharToHex(token));
+        config.erase(0, pos + 1);
+    }
+    perfLockConfigs.push_back(convertCharToHex(config));
+    perfConfig.perfLockOpts = perfLockConfigs;
+    perfConfig.usePerfLock = true;
+
+    PerfLock::setPerfLockOpt(perfConfig);
+}
+
 void ResourceManager::processBTCodecInfo(const XML_Char **attr, const int attr_count)
 {
     char *saveptr = NULL;
@@ -13358,6 +13389,9 @@ void ResourceManager::startTag(void *userdata, const XML_Char *tag_name,
     } else if (!strcmp(tag_name, "usb_vendor")) {
         if (attr[1])
             usb_vendor_uuid_list.push_back(attr[1]);
+        return;
+    } else if (!strcmp(tag_name, "perf_lock")) {
+        processPerfLockConfig(attr);
         return;
     }
 
