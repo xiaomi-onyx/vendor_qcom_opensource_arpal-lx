@@ -5398,6 +5398,20 @@ int ResourceManager::HandleDetectionStreamAction(pal_stream_type_t type, int32_t
                             device_to_connect);
                 }
                 break;
+            case ST_INTERNAL_PAUSE:
+                if (str != (Stream *)data) {
+                    status = str->Pause(true);
+                    if (status)
+                        PAL_ERR(LOG_TAG, "Internal pause stream failed");
+                }
+                break;
+            case ST_INTERNAL_RESUME:
+                if (str != (Stream *)data) {
+                    status = str->Resume(true);
+                    if (status)
+                        PAL_ERR(LOG_TAG, "Internal resume stream failed");
+                }
+                break;
             default:
                 break;
         }
@@ -5408,14 +5422,14 @@ int ResourceManager::HandleDetectionStreamAction(pal_stream_type_t type, int32_t
 }
 
 int ResourceManager::StopOtherDetectionStreams(void *st) {
-    HandleDetectionStreamAction(PAL_STREAM_VOICE_UI, ST_PAUSE, st);
+    HandleDetectionStreamAction(PAL_STREAM_VOICE_UI, ST_INTERNAL_PAUSE, st);
     HandleDetectionStreamAction(PAL_STREAM_ACD, ST_PAUSE, st);
     HandleDetectionStreamAction(PAL_STREAM_SENSOR_PCM_DATA, ST_PAUSE, st);
     return 0;
 }
 
 int ResourceManager::StartOtherDetectionStreams(void *st) {
-    HandleDetectionStreamAction(PAL_STREAM_VOICE_UI, ST_RESUME, st);
+    HandleDetectionStreamAction(PAL_STREAM_VOICE_UI, ST_INTERNAL_RESUME, st);
     HandleDetectionStreamAction(PAL_STREAM_ACD, ST_RESUME, st);
     HandleDetectionStreamAction(PAL_STREAM_SENSOR_PCM_DATA, ST_RESUME, st);
     return 0;

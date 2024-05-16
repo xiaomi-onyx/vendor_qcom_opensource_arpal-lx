@@ -128,8 +128,8 @@ class StreamACD : public Stream {
         return -ENOSYS;
     }
 
-    int32_t Resume() override;
-    int32_t Pause() override;
+    int32_t Resume(bool is_internal __unused) override;
+    int32_t Pause(bool is_internal __unused) override;
     int32_t HandleConcurrentStream(bool active) override;
 
     pal_device_id_t GetAvailCaptureDevice();

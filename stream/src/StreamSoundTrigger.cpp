@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -808,13 +808,19 @@ int StreamSoundTrigger::connectStreamDevice_l(Stream* streamHandle, struct pal_d
     return status;
 }
 
-int32_t StreamSoundTrigger::Resume() {
+int32_t StreamSoundTrigger::Resume(bool is_internal) {
     int32_t status = 0;
 
     PAL_DBG(LOG_TAG, "Enter");
     std::lock_guard<std::mutex> lck(mStreamMutex);
-    std::shared_ptr<StEventConfig> ev_cfg(new StResumeEventConfig());
-    status = cur_state_->ProcessEvent(ev_cfg);
+    if (is_internal) {
+        std::shared_ptr<StEventConfig> ev_cfg(new StInternalResumeEventConfig());
+        status = cur_state_->ProcessEvent(ev_cfg);
+    } else {
+        std::shared_ptr<StEventConfig> ev_cfg(new StResumeEventConfig());
+        status = cur_state_->ProcessEvent(ev_cfg);
+    }
+
     if (status) {
         PAL_ERR(LOG_TAG, "Resume failed");
     }
@@ -823,13 +829,19 @@ int32_t StreamSoundTrigger::Resume() {
     return status;
 }
 
-int32_t StreamSoundTrigger::Pause() {
+int32_t StreamSoundTrigger::Pause(bool is_internal) {
     int32_t status = 0;
 
     PAL_DBG(LOG_TAG, "Enter");
     std::lock_guard<std::mutex> lck(mStreamMutex);
-    std::shared_ptr<StEventConfig> ev_cfg(new StPauseEventConfig());
-    status = cur_state_->ProcessEvent(ev_cfg);
+    if (is_internal) {
+        std::shared_ptr<StEventConfig> ev_cfg(new StInternalPauseEventConfig());
+        status = cur_state_->ProcessEvent(ev_cfg);
+    } else {
+        std::shared_ptr<StEventConfig> ev_cfg(new StPauseEventConfig());
+        status = cur_state_->ProcessEvent(ev_cfg);
+    }
+
     if (status) {
         PAL_ERR(LOG_TAG, "Pause failed");
     }
@@ -950,10 +962,8 @@ int32_t StreamSoundTrigger::SetEngineDetectionState(int32_t det_type) {
         return -EINVAL;
     }
 
-    if (det_type == GMM_DETECTED) {
+    if (det_type == GMM_DETECTED)
         rm->acquireWakeLock();
-        reader_->updateState(READER_PREPARED);
-    }
 
     std::shared_ptr<StEventConfig> ev_cfg(
        new StDetectedEventConfig(det_type));
@@ -1828,6 +1838,7 @@ int32_t StreamSoundTrigger::notifyClient(uint32_t detection) {
     if (callback_) {
         // update stream state to stopped before unlock stream mutex
         currentState = STREAM_STOPPED;
+        reader_->updateState(READER_PREPARED);
         notify_time = std::chrono::steady_clock::now();
         total_process_duration =
             std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -2082,11 +2093,13 @@ int32_t StreamSoundTrigger::StIdle::ProcessEvent(
             }
             break;
         }
-        case ST_EV_PAUSE: {
+        case ST_EV_PAUSE:
+        case ST_EV_INTERNAL_PAUSE: {
             st_stream_.paused_ = true;
             break;
         }
-        case ST_EV_RESUME: {
+        case ST_EV_RESUME:
+        case ST_EV_INTERNAL_RESUME: {
             st_stream_.paused_ = false;
             break;
         }
@@ -2258,6 +2271,25 @@ int32_t StreamSoundTrigger::StLoaded::ProcessEvent(
              */
             break;
         }
+        case ST_EV_INTERNAL_RESUME: {
+            st_stream_.paused_ = false;
+            if (!st_stream_.isStarted()) {
+                // Possible if App has stopped recognition during active
+                // concurrency.
+                break;
+            }
+            // Update conf levels in case conf level is set to 100 in pause
+            if (st_stream_.rec_config_) {
+                status = st_stream_.SendRecognitionConfig(st_stream_.rec_config_);
+                if (0 != status) {
+                    PAL_ERR(LOG_TAG, "Failed to send recognition config, status %d",
+                        status);
+                    break;
+                }
+            }
+            // fall through to start
+            [[fallthrough]];
+        }
         case ST_EV_START_RECOGNITION: {
             if (st_stream_.paused_) {
                 /*
@@ -2381,7 +2413,8 @@ int32_t StreamSoundTrigger::StLoaded::ProcessEvent(
 
             break;
         }
-        case ST_EV_PAUSE: {
+        case ST_EV_PAUSE:
+        case ST_EV_INTERNAL_PAUSE: {
             st_stream_.paused_ = true;
             break;
         }
@@ -2659,7 +2692,8 @@ int32_t StreamSoundTrigger::StActive::ProcessEvent(
             }
             break;
         }
-        case ST_EV_PAUSE: {
+        case ST_EV_PAUSE:
+        case ST_EV_INTERNAL_PAUSE: {
             st_stream_.paused_ = true;
             // fall through to stop
             [[fallthrough]];
@@ -3014,7 +3048,8 @@ int32_t StreamSoundTrigger::StDetected::ProcessEvent(
             rm->releaseWakeLock();
             break;
         }
-        case ST_EV_PAUSE: {
+        case ST_EV_PAUSE:
+        case ST_EV_INTERNAL_PAUSE: {
             st_stream_.CancelDelayedStop();
             st_stream_.paused_ = true;
             // fall through to stop
@@ -3117,7 +3152,8 @@ int32_t StreamSoundTrigger::StDetected::ProcessEvent(
             // START event will be handled in loaded state.
             break;
         }
-        case ST_EV_RESUME: {
+        case ST_EV_RESUME:
+        case ST_EV_INTERNAL_RESUME: {
             st_stream_.paused_ = false;
             break;
         }
@@ -3319,7 +3355,8 @@ int32_t StreamSoundTrigger::StBuffering::ProcessEvent(
             // START event will be handled in loaded state.
             break;
         }
-        case ST_EV_PAUSE: {
+        case ST_EV_PAUSE:
+        case ST_EV_INTERNAL_PAUSE: {
             st_stream_.paused_ = true;
             PAL_DBG(LOG_TAG, "StBuffering: Pause");
             // fall through to stop
@@ -3671,12 +3708,15 @@ int32_t StreamSoundTrigger::StSSR::ProcessEvent(
             }
             break;
         }
-        case ST_EV_PAUSE: {
+        case ST_EV_PAUSE:
+        case ST_EV_INTERNAL_PAUSE: {
             st_stream_.paused_ = true;
-            status = st_stream_.notifyClient(PAL_RECOGNITION_STATUS_ABORT);
+            if (ev_cfg->id_ == ST_EV_PAUSE)
+                status = st_stream_.notifyClient(PAL_RECOGNITION_STATUS_ABORT);
             break;
         }
-        case ST_EV_RESUME: {
+        case ST_EV_RESUME:
+        case ST_EV_INTERNAL_RESUME: {
             if (st_stream_.paused_) {
                 if (st_stream_.currentState == STREAM_STARTED)
                     st_stream_.state_for_restore_ = ST_STATE_ACTIVE;
