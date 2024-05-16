@@ -621,6 +621,16 @@ protected:
     static bool lpi_logging_;
     std::map<int, std::pair<session_callback, uint64_t>> mixerEventCallbackMap;
     static std::thread mixerEventTread;
+    /*
+     * Thread to handle deferred switch, only applicable
+     * when low latency bargein is enabled.
+     */
+    static std::thread vui_deferred_switch_thread_;
+    static std::condition_variable vui_switch_cv_;
+    static std::mutex vui_switch_mutex_;
+    static bool vui_switch_thread_exit_;
+    static int deferred_switch_cnt_;
+    static void voiceUIDeferredSwitchLoop(ResourceManager* rm);
     std::shared_ptr<CaptureProfile> SoundTriggerCaptureProfile;
     std::shared_ptr<CaptureProfile> TXMacroCaptureProfile;
     ResourceManager();

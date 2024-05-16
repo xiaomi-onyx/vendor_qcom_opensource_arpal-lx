@@ -161,6 +161,9 @@
 #define WAIT_LL_PB 4
 #define WAIT_RECOVER_FET 150000
 
+#define NLPI_LPI_SWITCH_DELAY_SEC 5
+#define NLPI_LPI_SWITCH_SLEEP_INTERVAL_SEC 1
+
 /*this can be over written by the config file settings*/
 uint32_t pal_log_lvl = (PAL_LOG_ERR|PAL_LOG_INFO);
 
@@ -521,6 +524,11 @@ int ResourceManager::ACDConcurrencyDisableCount = 0;
 int ResourceManager::SNSPCMDataConcurrencyEnableCount = 0;
 int ResourceManager::SNSPCMDataConcurrencyDisableCount = 0;
 defer_switch_state_t ResourceManager::deferredSwitchState = NO_DEFER;
+std::thread ResourceManager::vui_deferred_switch_thread_;
+std::condition_variable ResourceManager::vui_switch_cv_;
+std::mutex ResourceManager::vui_switch_mutex_;
+bool ResourceManager::vui_switch_thread_exit_ = false;
+int ResourceManager::deferred_switch_cnt_ = -1;
 int ResourceManager::wake_lock_fd = -1;
 int ResourceManager::wake_unlock_fd = -1;
 uint32_t ResourceManager::wake_lock_cnt = 0;
@@ -1049,6 +1057,12 @@ ResourceManager::ResourceManager()
     use_lpi_ = IsLPISupported(PAL_STREAM_VOICE_UI) ||
         IsLPISupported(PAL_STREAM_ACD) ||
         IsLPISupported(PAL_STREAM_SENSOR_PCM_DATA);
+
+    if (IsLowLatencyBargeinSupported(PAL_STREAM_VOICE_UI)) {
+        vui_deferred_switch_thread_ = std::thread(
+            ResourceManager::voiceUIDeferredSwitchLoop, this);
+    }
+
 #ifdef SOC_PERIPHERAL_PROT
     socPerithread = std::thread(loadSocPeripheralLib);
 #endif
@@ -5541,22 +5555,92 @@ void ResourceManager::handleConcurrentStreamSwitch(std::vector<pal_stream_type_t
 
 bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
 {
-    if (isAnyVUIStreamBuffering()) {
-        if (stream_active)
-            deferredSwitchState =
-                (deferredSwitchState == DEFER_NLPI_LPI_SWITCH) ? NO_DEFER :
-                 DEFER_LPI_NLPI_SWITCH;
-        else
+    std::unique_lock<std::mutex> lck(vui_switch_mutex_);
+
+    /*
+     * When switching from NLPI to LPI:
+     * 1. If low latency bargein is enabled, nlpi to lpi switch
+     *    will be delayed by 5s until sleep is done in thread
+     *    voiceUIDeferredSwitchLoop.
+     * 2. Else if there's any VoiceUI stream in buffering, delay
+     *    switch until buffering is done.
+     *
+     * When switching from LPI to NLPI:
+     * 1. If there's any VoiceUI stream in buffering, delay switch
+     *    until buffering is done.
+     * 2. Additionally if low latency bargein is enabled and there's
+     *    pending NLPI to LPI switch, then skip the pending switch
+     *    and exit the sleep in voiceUIDeferredSwitchLoop.
+     */
+    if (!stream_active) {
+        if (IsLowLatencyBargeinSupported(PAL_STREAM_VOICE_UI)) {
             deferredSwitchState =
                 (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) ? NO_DEFER :
                  DEFER_NLPI_LPI_SWITCH;
-        PAL_INFO(LOG_TAG, "VUI stream is in buffering state, defer %s switch deferred state:%d",
-                 stream_active? "LPI->NLPI": "NLPI->LPI", deferredSwitchState);
-        return true;
+            PAL_INFO(LOG_TAG,
+                "Low latency bargein enabled, defer NLPI->LPI switch, deferred state:%d",
+                deferredSwitchState);
+            deferred_switch_cnt_ = NLPI_LPI_SWITCH_DELAY_SEC;
+            vui_switch_cv_.notify_all();
+            return true;
+        } else if (isAnyVUIStreamBuffering()) {
+            deferredSwitchState =
+                (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) ? NO_DEFER :
+                 DEFER_NLPI_LPI_SWITCH;
+            PAL_INFO(LOG_TAG,
+                "VUI stream in buffering, defer NLPI->LPI switch, deferred state:%d",
+                deferredSwitchState);
+            return true;
+        }
+    } else {
+        if (isAnyVUIStreamBuffering()) {
+            deferredSwitchState =
+                (deferredSwitchState == DEFER_NLPI_LPI_SWITCH) ? NO_DEFER :
+                 DEFER_LPI_NLPI_SWITCH;
+            PAL_INFO(LOG_TAG,
+                "VUI stream in buffering, defer LPI->NLPI switch, deferred state:%d,"
+                " LPI will be used until buffering done, hence EC won't be applied",
+                deferredSwitchState);
+            return true;
+        }
+        if (IsLowLatencyBargeinSupported(PAL_STREAM_VOICE_UI) &&
+            deferredSwitchState == DEFER_NLPI_LPI_SWITCH) {
+            deferredSwitchState = NO_DEFER;
+            deferred_switch_cnt_ = -1;
+            PAL_INFO(LOG_TAG,
+                "Cancel pending NLPI to LPI switch as new concurrency coming");
+            return true;
+        }
     }
+
     return false;
 }
 
+void ResourceManager::voiceUIDeferredSwitchLoop(ResourceManager* rm)
+{
+    PAL_INFO(LOG_TAG, "Enter");
+    std::unique_lock<std::mutex> lck(rm->vui_switch_mutex_);
+
+    while (!rm->vui_switch_thread_exit_) {
+        if (deferred_switch_cnt_ < 0)
+            rm->vui_switch_cv_.wait(lck);
+
+        if (deferred_switch_cnt_ > 0) {
+            deferred_switch_cnt_--;
+            lck.unlock();
+            sleep(NLPI_LPI_SWITCH_SLEEP_INTERVAL_SEC);
+            lck.lock();
+        }
+
+        if (deferred_switch_cnt_ == 0) {
+            lck.unlock();
+            rm->handleDeferredSwitch();
+            lck.lock();
+            if (deferred_switch_cnt_ == 0)
+                deferred_switch_cnt_ = -1;
+        }
+    }
+}
 
 void ResourceManager::handleDeferredSwitch()
 {
