@@ -317,24 +317,24 @@
 
     <path name="amic6">
         <ctl name="TX DEC4 MUX" value="SWR_MIC" />
-        <ctl name="TX SMIC MUX4" value="SWR_MIC4" />
+        <ctl name="TX SMIC MUX4" value="SWR_MIC9" />
         <ctl name="TX_AIF2_CAP Mixer DEC4" value="1" />
+        <ctl name="ADC4 MUX" value="CH4_AMIC5" />
+        <ctl name="ADC4 ChMap" value="SWRM_TX3_CH2" />
+        <ctl name="TX3 MODE" value="ADC_LP" />
+        <ctl name="ADC4_MIXER Switch" value="1" />
+        <ctl name="AMIC5_MIXER Switch" value="1" />
+    </path>
+
+    <path name="amic7">
+        <ctl name="TX DEC5 MUX" value="SWR_MIC" />
+        <ctl name="TX SMIC MUX5" value="SWR_MIC4" />
+        <ctl name="TX_AIF2_CAP Mixer DEC5" value="1" />
         <ctl name="ADC1 MUX" value="CH1_AMIC1" />
         <ctl name="ADC1 ChMap" value="SWRM_TX2_CH1" />
         <ctl name="TX0 MODE" value="ADC_LP" />
         <ctl name="ADC1_MIXER Switch" value="1" />
         <ctl name="AMIC1_MIXER Switch" value="1" />
-    </path>
-
-    <path name="amic7">
-        <ctl name="TX DEC5 MUX" value="SWR_MIC" />
-        <ctl name="TX SMIC MUX5" value="SWR_MIC5" />
-        <ctl name="TX_AIF2_CAP Mixer DEC5" value="1" />
-        <ctl name="ADC2 MUX" value="CH2_AMIC4" />
-        <ctl name="ADC2 ChMap" value="SWRM_TX2_CH2" />
-        <ctl name="TX1 MODE" value="ADC_LP" />
-        <ctl name="ADC2_MIXER Switch" value="1" />
-        <ctl name="AMIC4_MIXER Switch" value="1" />
     </path>
 
     <path name="dmic1">
@@ -395,6 +395,7 @@
     </path>
 
     <path name="haptics-dev">
+        <ctl name="Haptics VISENSE Switch" value="1" />
         <ctl name="SWR DAC_Port Switch" value="1" />
     </path>
 
@@ -409,7 +410,7 @@
     </path>
 
     <path name="haptics-vi-feedback-mono">
-        <ctl name="WSA2_AIF_VI Mixer WSA2_SPKR_VI_2" value="1" />
+        <ctl name="WSA2_AIF_VI Mixer WSA2_SPKR_VI_1" value="1" />
         <ctl name="WSA2 2CH_DMA ENABLE" value="1" />
     </path>
 
@@ -678,7 +679,6 @@
         <ctl name="SpkrRight VISENSE Switch" value="1" />
         <ctl name="SpkrRight SWR DAC_Port Switch" value="1" />
         <ctl name="WSA PBR Enable" value="1" />
-        <ctl name="WSA_RX1 Digital Volume" value="50" />
     </path>
 
     <path name="speaker-ultrasound">

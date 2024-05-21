@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1320,6 +1320,7 @@ UsecasePCMData::UsecasePCMData(uint32_t usecase_id) : Usecase(usecase_id)
     this->pal_devices[0].config.bit_width = 16;
     this->pal_devices[0].config.sample_rate = 16000;
     this->pal_devices[0].config.ch_info.channels = 1;
+    this->pal_devices[0].config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
 
     this->tags.push_back(RD_SHMEM_ENDPOINT);
     this->tags.push_back(TAG_STREAM_MFC);

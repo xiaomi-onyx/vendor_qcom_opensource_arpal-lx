@@ -543,7 +543,7 @@ bool ResourceManager::isUpdDedicatedBeEnabled = false;
 bool ResourceManager::isDeviceMuxConfigEnabled = false;
 bool ResourceManager::isUpdDutyCycleEnabled = false;
 bool ResourceManager::isUPDVirtualPortEnabled = false;
-bool ResourceManager::isXPANEnabled = false;
+bool ResourceManager::isCPEnabled = false;
 bool ResourceManager::isDummyDevEnabled = false;
 bool ResourceManager::isProxyRecordActive = false;
 int ResourceManager::max_voice_vol = -1;     /* Variable to store max volume index for voice call */
@@ -7503,6 +7503,16 @@ bool ResourceManager::compareSharedBEStreamDevAttr(std::vector <std::tuple<Strea
                         PAL_DBG(LOG_TAG, "incoming dev: %d priority: 0x%x has same or higher priority than cur dev:%d priority: 0x%x",
                                             newDevAttr->id, newDevPrio, curDevAttr.id, curDevPrio);
                         switchStreams = true;
+                    } else if (isBtA2dpDevice(newDevAttr->id) && isBtScoDevice(curDevAttr.id) &&
+                               !curDev->isDeviceReady()) {
+                        /* At the time of VOIP call end, it might happen that Voip Rx stream
+                         * will go to standby after a delay. After SCO is disabled, APM will
+                         * send routing for streams to A2DP device. At this time due to high
+                         * priority stream being active on SCO, routing to A2DP will be ignored.
+                         * Special handling to handle such scenarios and route all existing SCO
+                         * streams to A2DP as well.
+                         */
+                        switchStreams = true;
                     } else {
                         PAL_DBG(LOG_TAG, "incoming dev: %d priority: 0x%x has lower priority than cur dev:%d priority: 0x%x,"
                                         " switching incoming stream to cur dev",
@@ -8667,7 +8677,7 @@ int ResourceManager::setConfigParams(struct str_parms *parms)
     ret = setMuxconfigEnableParam(parms, value, len);
     ret = setUpdDutyCycleEnableParam(parms, value, len);
     ret = setUpdVirtualPortParam(parms, value, len);
-    setXPANEnableParam(parms, value, len);
+    setConnectivityProxyEnableParam(parms, value, len);
     setDummyDevEnableParam(parms, value, len);
 
     ret = setHapticsPriorityParam(parms, value, len);
@@ -8880,22 +8890,22 @@ int ResourceManager::setUpdVirtualPortParam(struct str_parms *parms, char *value
     return ret;
 }
 
-void ResourceManager::setXPANEnableParam(struct str_parms *parms, char *value, int len)
+void ResourceManager::setConnectivityProxyEnableParam(struct str_parms *parms, char *value, int len)
 {
     int ret = -EINVAL;
 
     if (!value || !parms)
         return;
 
-    ret = str_parms_get_str(parms, "xpan_enabled",
+    ret = str_parms_get_str(parms, "connectivity_proxy_enabled",
                             value, len);
     PAL_VERBOSE(LOG_TAG," value %s", value);
 
     if (ret >= 0) {
         if (value && !strncmp(value, "true", sizeof("true")))
-            ResourceManager::isXPANEnabled = true;
+            ResourceManager::isCPEnabled = true;
 
-        str_parms_del(parms, "xpan_enabled");
+        str_parms_del(parms, "connectivity_proxy_enabled");
     }
 }
 
@@ -10837,6 +10847,21 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
         case PAL_PARAM_ID_BT_SCO_WB:
         case PAL_PARAM_ID_BT_SCO_SWB:
         case PAL_PARAM_ID_BT_SCO_LC3:
+        {
+            std::vector<pal_device_id_t> scoDev;
+            scoDev.push_back(PAL_DEVICE_OUT_BLUETOOTH_SCO);
+            scoDev.push_back(PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET);
+            struct pal_device dattr;
+            for (auto devId: scoDev) {
+                dattr.id = devId;
+                if (!isDeviceAvailable(dattr.id))
+                    continue;
+                mResourceManagerMutex.unlock();
+                WbSpeechConfig(dattr.id, param_id, param_payload);
+                mResourceManagerMutex.lock();
+            }
+        }
+        break;
         case PAL_PARAM_ID_BT_SCO_NREC:
         {
             std::shared_ptr<Device> dev = nullptr;
@@ -12314,6 +12339,18 @@ bool ResourceManager::isDeviceReady(pal_device_id_t id)
     return is_ready;
 }
 
+bool ResourceManager::isBtA2dpDevice(pal_device_id_t id)
+{
+    if (id == PAL_DEVICE_OUT_BLUETOOTH_A2DP ||
+        id == PAL_DEVICE_OUT_BLUETOOTH_BLE ||
+        id == PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST ||
+        id == PAL_DEVICE_IN_BLUETOOTH_A2DP ||
+        id == PAL_DEVICE_IN_BLUETOOTH_BLE)
+        return true;
+    else
+        return false;
+}
+
 bool ResourceManager::isBtScoDevice(pal_device_id_t id)
 {
     if (id == PAL_DEVICE_OUT_BLUETOOTH_SCO ||
@@ -13698,17 +13735,27 @@ bool ResourceManager::doDevAttrDiffer(struct pal_device *inDevAttr,
     if (ResourceManager::activeGroupDevConfig &&
             (inDevAttr->id == PAL_DEVICE_OUT_SPEAKER ||
              inDevAttr->id == PAL_DEVICE_OUT_HANDSET)) {
-        if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate !=
+        uint32_t in_sample_rate = 0;
+        uint32_t in_channels  = 0;
+        if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate == 0)
+            in_sample_rate = inDevAttr->config.sample_rate;
+        else
+            in_sample_rate = ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate;
+        if (in_sample_rate !=
             ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate) {
             PAL_DBG(LOG_TAG, "found diff sample rate %d, running dev has %d, device switch needed",
-                    ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.sample_rate,
+                    in_sample_rate,
                     ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.sample_rate);
             ret = true;
         }
-        if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels !=
+        if (ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels == 0)
+            in_channels = inDevAttr->config.ch_info.channels;
+        else
+            in_channels = ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels;
+        if (in_channels !=
             ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.channels) {
             PAL_DBG(LOG_TAG, "found diff channel %d, running dev has %d, device switch needed",
-                    ResourceManager::activeGroupDevConfig->grp_dev_hwep_cfg.channels,
+                    in_channels,
                     ResourceManager::currentGroupDevConfig.grp_dev_hwep_cfg.channels);
             ret = true;
         }
@@ -13961,3 +14008,40 @@ void ResourceManager::setProxyRecordActive(bool isActive) {
     isProxyRecordActive = isActive;
 }
 
+void ResourceManager::WbSpeechConfig(pal_device_id_t devId,
+                                     uint32_t param_id, void *param_payload) {
+    int status = 0;
+    std::shared_ptr<Device> dev = nullptr;
+    struct pal_device curDevAttr, newDevAttr;
+    std::vector <Stream *> activeScoStreams;
+    struct pal_stream_attributes sAttr;
+    curDevAttr.id = devId;
+    dev = Device::getInstance(&curDevAttr, rm);
+    if (dev) {
+        dev->getDeviceAttributes(&curDevAttr);
+        status = dev->setDeviceParameter(param_id, param_payload);
+        if (status)
+            PAL_ERR(LOG_TAG, "set device param %d, status: ", param_id, status);
+        // check and force device switch.
+        newDevAttr.id = devId;
+        mActiveStreamMutex.lock();
+        getActiveStream_l(activeScoStreams, dev);
+        if (activeScoStreams.size() == 0 ||
+            activeScoStreams[0] == nullptr) {
+            mActiveStreamMutex.unlock();
+            return;
+        }
+        // only get attr for activeScoStreams[0] because other streams can be switched as well
+        activeScoStreams[0]->getStreamAttributes(&sAttr);
+        status = rm->getDeviceConfig(&newDevAttr, &sAttr);
+        mActiveStreamMutex.unlock();
+        if (curDevAttr.config.sample_rate == newDevAttr.config.sample_rate) {
+            // no change before and after setting WbSpeechConfig, no need to force device switch.
+            return;
+        }
+        status = forceDeviceSwitch(dev, &newDevAttr);
+        PAL_DBG(LOG_TAG,
+                "force device switch for running SCO stream, status: %d, sample rate(%d->%d)",
+                status, curDevAttr.config.sample_rate, newDevAttr.config.sample_rate);
+    }
+}

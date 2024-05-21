@@ -101,7 +101,8 @@ std::pair<int, int> AidlToLegacy::getFdIntFromNativeHandle(
 
 void AidlToLegacy::convertPalCallbackBuffer(const PalCallbackBuffer *rwDonePayload,
                                             pal_callback_buffer *cbBuffer) {
-    memcpy(cbBuffer->buffer, rwDonePayload->buffer.data(), cbBuffer->size);
+    if (cbBuffer->size > 0 && rwDonePayload->buffer.size() == cbBuffer->size)
+        memcpy(cbBuffer->buffer, rwDonePayload->buffer.data(), cbBuffer->size);
     cbBuffer->ts->tv_sec = rwDonePayload->timeStamp.tvSec;
     cbBuffer->ts->tv_nsec = rwDonePayload->timeStamp.tvNSec;
     cbBuffer->status = rwDonePayload->status;

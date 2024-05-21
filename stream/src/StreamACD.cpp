@@ -1136,7 +1136,9 @@ int32_t StreamACD::ACDLoaded::ProcessEvent(
             std::shared_ptr<CaptureProfile> cap_prof = nullptr;
 
             // Do not update capture profile when resuming stream
-            if (ev_cfg->id_ == ACD_EV_START_RECOGNITION) {
+            if (ev_cfg->id_ == ACD_EV_START_RECOGNITION ||
+               (ev_cfg->id_ == ACD_EV_RESUME &&
+                !acd_stream_.rm->GetSoundTriggerCaptureProfile())) {
                 backend_update = acd_stream_.rm->UpdateSoundTriggerCaptureProfile(
                     &acd_stream_, true);
                 if (backend_update) {

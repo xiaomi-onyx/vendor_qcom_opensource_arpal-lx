@@ -147,7 +147,10 @@ StreamCommon::StreamCommon(const struct pal_stream_attributes *sattr, struct pal
         dev->insertStreamDeviceAttr(&dattr[i], this);
         mPalDevices.push_back(dev);
         mStreamMutex.unlock();
-        isDeviceConfigUpdated = rm->updateDeviceConfig(&dev, &dattr[i], sattr);
+        // streams with VA MIC is handled in rm::handleConcurrentStreamSwitch()
+        if (dattr[i].id != PAL_DEVICE_IN_HANDSET_VA_MIC &&
+            dattr[i].id != PAL_DEVICE_IN_HEADSET_VA_MIC)
+            isDeviceConfigUpdated = rm->updateDeviceConfig(&dev, &dattr[i], sattr);
         mStreamMutex.lock();
 
         if (isDeviceConfigUpdated)

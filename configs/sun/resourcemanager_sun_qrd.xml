@@ -40,7 +40,7 @@
         <param key="hifi_filter" value="false"/>
         <param key="max_sessions" value="128"/>
         <param key="max_nonTunnel_sessions" value="4"/>
-        <param key="xpan_enabled" value ="true" />
+        <param key="connectivity_proxy_enabled" value ="true" />
         <param key="logging_level" value ="3" />
         <param key="context_manager_enable" value ="true" />
         <param key="lpi_logging_enable" value ="false" />
@@ -99,12 +99,13 @@
             <modepair key="0x121C6000" value="0xB3000001"/>
         </mode_map>
     </config_voice>
-    <low_power_vote_streams>
-        <stream_type>PAL_STREAM_VOICE_UI</stream_type>
-        <stream_type>PAL_STREAM_ACD</stream_type>
-        <stream_type>PAL_STREAM_ULTRASOUND</stream_type>
-        <stream_type>PAL_STREAM_SENSOR_PCM_DATA</stream_type>
-    </low_power_vote_streams>
+    <sleep_monitor_vote_streams>
+        <low_power_stream_type>PAL_STREAM_VOICE_UI</low_power_stream_type>
+        <low_power_stream_type>PAL_STREAM_ACD</low_power_stream_type>
+        <low_power_stream_type>PAL_STREAM_ULTRASOUND</low_power_stream_type>
+        <low_power_stream_type>PAL_STREAM_SENSOR_PCM_DATA</low_power_stream_type>
+        <avoid_vote_stream_type>PAL_STREAM_CONTEXT_PROXY</avoid_vote_stream_type>
+    </sleep_monitor_vote_streams>
     <group_device_cfg>
         <upd_rx>
             <snd_device name="handset" />
@@ -684,7 +685,7 @@
             <max_channels>1</max_channels>
             <channels>1</channels>
             <bit_width>32</bit_width>
-            <samplerate>48000</samplerate>
+            <samplerate>8000</samplerate>
             <usecase>
                 <name>PAL_STREAM_HAPTICS</name>
             </usecase>
@@ -1044,10 +1045,10 @@
             <usecase>
                 <name>PAL_STREAM_HAPTICS</name>
                 <custom-config key="haptics-over-wsa">
-                    <backend_name>CODEC_DMA-LPAIF_WSA2-RX-0</backend_name>
-                    <snd_device_name>haptics-dev-wsa</snd_device_name>
+                    <backend_name>CODEC_DMA-LPAIF_WSA2-RX-1</backend_name>
+                    <snd_device_name>haptics-dev</snd_device_name>
                     <samplerate>48000</samplerate>
-                    <bit_width>32</bit_width>
+                    <bit_width>16</bit_width>
                 </custom-config>
             </usecase>
         </out-device>

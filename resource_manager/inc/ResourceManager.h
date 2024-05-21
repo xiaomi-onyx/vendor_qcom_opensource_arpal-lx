@@ -660,7 +660,7 @@ public:
     static bool isDeviceMuxConfigEnabled;
     static bool isUHQAEnabled;
     static bool isSignalHandlerEnabled;
-    static bool isXPANEnabled;
+    static bool isCPEnabled;
     static bool isCRSCallEnabled;
     static bool isDummyDevEnabled;
     static bool isProxyRecordActive;
@@ -982,7 +982,7 @@ public:
     static int setMuxconfigEnableParam(struct str_parms *parms,char *value, int len);
     static int setHapticsPriorityParam(struct str_parms *parms,char *value, int len);
     static int setHapticsDrivenParam(struct str_parms *parms,char *value, int len);
-    static void setXPANEnableParam(struct str_parms *parms,char *value, int len);
+    static void setConnectivityProxyEnableParam(struct str_parms *parms,char *value, int len);
     static void setDummyDevEnableParam(struct str_parms *parms,char *value, int len);
     static bool isLpiLoggingEnabled();
     static void processConfigParams(const XML_Char **attr);
@@ -1002,6 +1002,7 @@ public:
     bool isDeviceReady(pal_device_id_t id);
     static bool isBtScoDevice(pal_device_id_t id);
     static bool isBtDevice(pal_device_id_t id);
+    static bool isBtA2dpDevice(pal_device_id_t id);
     int32_t a2dpSuspend(pal_device_id_t dev_id);
     int32_t a2dpSuspendToDummy(pal_device_id_t dev_id);
     int32_t a2dpResume(pal_device_id_t dev_id);
@@ -1082,6 +1083,7 @@ public:
     int32_t pauseInCallMusic();
     void RegisterSTCaptureHandle(pal_param_st_capture_info_t stCaptureInfo, bool start);
     static void setProxyRecordActive(bool isActive);
+    void WbSpeechConfig(pal_device_id_t devId, uint32_t param_id, void *param_payload);
 };
 
 #endif
