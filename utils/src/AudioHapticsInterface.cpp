@@ -40,6 +40,7 @@
 #include "wsa_haptics_vi_api.h"
 
 std::shared_ptr<AudioHapticsInterface> AudioHapticsInterface::me_ = nullptr;
+std::vector<haptics_wave_designer_config_t> AudioHapticsInterface::compose_haptics_info;
 std::vector<haptics_wave_designer_config_t> AudioHapticsInterface::predefined_haptics_info;
 std::vector<haptics_wave_designer_config_t> AudioHapticsInterface::oneshot_haptics_info;
 int AudioHapticsInterface::ringtone_haptics_wave_design_mode;
@@ -89,6 +90,8 @@ void AudioHapticsInterface::startTag(void *userdata, const XML_Char *tag_name,
         data->hapticstag = TAG_ONESHOT_EFFECT;
     } else if (!strcmp(tag_name, "ringtone_effect")) {
         data->hapticstag = TAG_RINGTONE_EFFECT;
+    } else if (!strcmp(tag_name, "compose_effect")) {
+        data->hapticstag = TAG_COMPOSE_EFFECT;
     } else {
         PAL_INFO(LOG_TAG, "No matching Tag found");
     }
@@ -281,6 +284,121 @@ void AudioHapticsInterface::process_haptics_info(struct haptics_xml_data *data,
         }
     }
 
+    if (data->hapticstag == TAG_COMPOSE_EFFECT) {
+        if (!strcmp(tag_name, "num_channels")) {
+            HapticsCnfg.num_channels = atoi(data->data_buf);
+            compose_haptics_info.push_back(HapticsCnfg);
+        }
+        else if (!strcmp(tag_name, "channel_mask")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].channel_mask = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "wave_design_mode")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].wave_design_mode = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "auto_overdrive_brake_en")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].auto_overdrive_brake_en = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "f0_tracking_en")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].f0_tracking_en = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "f0_tracking_param_reset_flag")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].f0_tracking_param_reset_flag = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "override_flag")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].override_flag = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "tracked_freq_warmup_time_ms")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].tracked_freq_warmup_time_ms = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "settling_time_ms")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].settling_time_ms = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "delay_time_ms")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].delay_time_ms = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "wavegen_fstart_hz_q20")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].wavegen_fstart_hz_q20 = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "repetition_count")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].repetition_count = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "repetition_period_ms")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].repetition_period_ms = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "pilot_tone_en")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].pilot_tone_en = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "low_pulse_intensity")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].low_pulse_intensity = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "mid_pulse_intensity")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].mid_pulse_intensity = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "high_pulse_intensity")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].high_pulse_intensity = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "pulse_width_ms")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].pulse_width_ms = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "pulse_sharpness")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].pulse_sharpness = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "num_pwl")) {
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].num_pwl = atoi(data->data_buf);
+        }
+        else if (!strcmp(tag_name, "pwl_time")) {
+            int j = 0;
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].pwl_time = (int32_t*)calloc(compose_haptics_info[size].num_pwl,
+                sizeof(int32_t));
+            for (int i = 0; i < compose_haptics_info[size].num_pwl; i++) {
+                compose_haptics_info[size].pwl_time[i] = atoi(&data->data_buf[j]);
+                PAL_DBG(LOG_TAG, "pwltime :%d", compose_haptics_info[size].pwl_time[i]);
+                for (; j < strlen(data->data_buf); j++) {
+                    if (data->data_buf[j] == ',') {
+                        j = j + 1;
+                        break;
+                    }
+                }
+            }
+        }
+        else if (!strcmp(tag_name, "pwl_acc")) {
+            int j = 0;
+            size = compose_haptics_info.size() - 1;
+            compose_haptics_info[size].pwl_acc = (int32_t*)calloc(compose_haptics_info[size].num_pwl,
+                sizeof(int32_t));
+            for (int i = 0; i < compose_haptics_info[size].num_pwl; i++) {
+                compose_haptics_info[size].pwl_acc[i] = atoi(&data->data_buf[j]);
+                PAL_DBG(LOG_TAG, "pwlacc :%d", compose_haptics_info[size].pwl_acc[i]);
+                for (; j < strlen(data->data_buf); j++) {
+                    if (data->data_buf[j] == ',') {
+                        j = j + 1;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     if (data->hapticstag == TAG_ONESHOT_EFFECT) {
         if (!strcmp(tag_name, "num_channels")) {
             HapticsCnfg.num_channels = atoi(data->data_buf);
@@ -377,14 +495,21 @@ void AudioHapticsInterface::process_haptics_info(struct haptics_xml_data *data,
     PAL_ERR(LOG_TAG, "%s \n", data->data_buf);
 }
 
-void AudioHapticsInterface::getTouchHapticsEffectConfiguration(int effect_id, haptics_wave_designer_config_t **HConfig)
+void AudioHapticsInterface::getTouchHapticsEffectConfiguration(int effect_id, bool isCompose, haptics_wave_designer_config_t **HConfig)
 {
     if (effect_id >= 0) {
         if (*HConfig == NULL) {
-            *HConfig = (haptics_wave_designer_config_t *) calloc(1, sizeof(predefined_haptics_info[effect_id]));
-            if (*HConfig)
-                memcpy(*HConfig, &predefined_haptics_info[effect_id],
-                                            sizeof(predefined_haptics_info[effect_id]));
+            if (isCompose) {
+                *HConfig = (haptics_wave_designer_config_t*)calloc(1, sizeof(compose_haptics_info[effect_id]));
+                if (*HConfig)
+                    memcpy(*HConfig, &compose_haptics_info[effect_id],
+                        sizeof(compose_haptics_info[effect_id]));
+            } else {
+                *HConfig = (haptics_wave_designer_config_t*)calloc(1, sizeof(predefined_haptics_info[effect_id]));
+                if (*HConfig)
+                    memcpy(*HConfig, &predefined_haptics_info[effect_id],
+                        sizeof(predefined_haptics_info[effect_id]));
+            }
         }
     } else {
         if (*HConfig == NULL) {
