@@ -4604,7 +4604,7 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
                 data = (pal_param_haptics_cnfg_t *) param;
 
                 if (data->mode == PAL_STREAM_HAPTICS_TOUCH) {
-                    hap_info->getTouchHapticsEffectConfiguration(data->effect_id, &HConfig);
+                    hap_info->getTouchHapticsEffectConfiguration(data->effect_id, data->isCompose, &HConfig);
                     if (HConfig == nullptr) {
                         PAL_ERR(LOG_TAG, "HapticsConfig is not found.");
                         return;
@@ -4697,7 +4697,8 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
                                            HConfig->pilot_tone_en;
                         PAL_DBG(LOG_TAG, "Haptics Effect .pilot_tone_en %d",
                                                     hpwaveConf[ch].pilot_tone_en);
-                        if (data->effect_id >= 0) {
+
+                        if (data->effect_id >= 0 && !(data->isCompose)) {
                             switch (data->strength) {
                                 case 1 :
                                     hpwaveConf[ch].pulse_intensity = HConfig->mid_pulse_intensity;
@@ -4713,7 +4714,7 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
                             hpwaveConf[ch].pulse_intensity = (data->amplitude * 100);
                         }
                         if (hpwaveConf[ch].pulse_intensity > 100 ||
-                                            hpwaveConf[ch].pulse_intensity < 0)
+                                            hpwaveConf[ch].pulse_intensity <= 0)
                             hpwaveConf[ch].pulse_intensity = 30;
                             PAL_DBG(LOG_TAG, "Haptics Effect .pulse_intensity %d for strength %d",
                                                   hpwaveConf[ch].pulse_intensity, data->strength);
@@ -4809,7 +4810,7 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
                  haptics_wave_designer_config_t *HConfig = nullptr;
 
                  data = (pal_param_haptics_cnfg_t *)param;
-                 hap_info->getTouchHapticsEffectConfiguration(-1, &HConfig);
+                 hap_info->getTouchHapticsEffectConfiguration(-1, false, &HConfig);
 
                  if (HConfig == nullptr) {
                      PAL_ERR(LOG_TAG, "HapticsConfig is not found.");
