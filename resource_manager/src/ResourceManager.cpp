@@ -49,6 +49,7 @@
 #include "StreamCompress.h"
 #include "StreamSoundTrigger.h"
 #include "StreamACD.h"
+#include "StreamASR.h"
 #include "StreamInCall.h"
 #include "StreamACDB.h"
 #include "StreamContextProxy.h"
@@ -138,6 +139,7 @@
 #define MAX_SESSIONS_GENERIC 2
 #define MAX_SESSIONS_PCM_OFFLOAD 2
 #define MAX_SESSIONS_VOICE_UI 8
+#define MAX_SESSIONS_ASR 1
 #define MAX_SESSIONS_RAW 1
 #define MAX_SESSIONS_ACD 8
 #define MAX_SESSIONS_PROXY 8
@@ -407,6 +409,7 @@ const std::map<uint32_t, uint32_t> streamPriorityLUT {
     {PAL_STREAM_NON_TUNNEL,         3},
     {PAL_STREAM_HAPTICS,            3},
     {PAL_STREAM_ACD,                3},
+    {PAL_STREAM_ASR,                4},
     {PAL_STREAM_CONTEXT_PROXY,      3},
     {PAL_STREAM_SENSOR_PCM_DATA,    3},
     {PAL_STREAM_ULTRASOUND,         4},
@@ -521,6 +524,8 @@ int ResourceManager::concurrencyEnableCount = 0;
 int ResourceManager::concurrencyDisableCount = 0;
 int ResourceManager::ACDConcurrencyEnableCount = 0;
 int ResourceManager::ACDConcurrencyDisableCount = 0;
+int ResourceManager::ASRConcurrencyEnableCount = 0;
+int ResourceManager::ASRConcurrencyDisableCount = 0;
 int ResourceManager::SNSPCMDataConcurrencyEnableCount = 0;
 int ResourceManager::SNSPCMDataConcurrencyDisableCount = 0;
 defer_switch_state_t ResourceManager::deferredSwitchState = NO_DEFER;
@@ -1056,9 +1061,7 @@ ResourceManager::ResourceManager()
     }
 
     // init use_lpi_ flag
-    use_lpi_ = IsLPISupported(PAL_STREAM_VOICE_UI) ||
-        IsLPISupported(PAL_STREAM_ACD) ||
-        IsLPISupported(PAL_STREAM_SENSOR_PCM_DATA);
+    use_lpi_ = IsLPISupported();
 
 
 #ifdef SOC_PERIPHERAL_PROT
@@ -1702,6 +1705,10 @@ int32_t ResourceManager::voiceuiDmgrRestartUseCases(vui_dmgr_param_restart_useca
             PAL_INFO(LOG_TAG, "get matching streams for acd");
             getMatchingStStreams(active_streams_acd, st_streams, uc_info->usecases[i].vendor_uuid);
         }
+        else if (uc_info->usecases[i].stream_type == PAL_STREAM_ASR && active_streams_asr.size()) {
+            PAL_INFO(LOG_TAG, "get matching streams for asr");
+            getMatchingStStreams(active_streams_asr, st_streams, uc_info->usecases[i].vendor_uuid);
+        }
         else if (uc_info->usecases[i].stream_type == PAL_STREAM_SENSOR_PCM_DATA && active_streams_sensor_pcm_data.size()) {
             PAL_INFO(LOG_TAG, "get matching streams for sensor");
             getMatchingStStreams(active_streams_sensor_pcm_data, st_streams, uc_info->usecases[i].vendor_uuid);
@@ -2025,7 +2032,7 @@ int ResourceManager::init()
     struct pal_device dattr;
 
     mixerEventTread = std::thread(mixerEventWaitThreadLoop, rm);
-    if (rm && rm->IsLowLatencyBargeinSupported(PAL_STREAM_VOICE_UI)) {
+    if (rm && rm->IsLowLatencyBargeinSupported()) {
         vui_deferred_switch_thread_ = std::thread(
             ResourceManager::voiceUIDeferredSwitchLoop, rm);
     }
@@ -3237,6 +3244,10 @@ bool ResourceManager::isStreamSupported(struct pal_stream_attributes *attributes
             cur_sessions = active_streams_acd.size();
             max_sessions = MAX_SESSIONS_ACD;
             break;
+        case PAL_STREAM_ASR:
+            cur_sessions = active_streams_asr.size();
+            max_sessions = MAX_SESSIONS_ASR;
+            break;
         case PAL_STREAM_PCM_OFFLOAD:
             cur_sessions = active_streams_po.size();
             max_sessions = MAX_SESSIONS_PCM_OFFLOAD;
@@ -3403,6 +3414,24 @@ bool ResourceManager::isStreamSupported(struct pal_stream_attributes *attributes
             PAL_VERBOSE(LOG_TAG, "config suppported");
             result = true;
             break;
+        case PAL_STREAM_ASR:
+            if (attributes->direction != PAL_AUDIO_INPUT) {
+                return result;
+            }
+            channels = attributes->in_media_config.ch_info.channels;
+            samplerate = attributes->in_media_config.sample_rate;
+            bitwidth = attributes->in_media_config.bit_width;
+
+            rc = (StreamASR::isBitWidthSupported(bitwidth) |
+                  StreamASR::isSampleRateSupported(samplerate) |
+                  StreamASR::isChannelSupported(channels));
+            if (0 != rc) {
+                PAL_ERR(LOG_TAG, "Config not supported rc: %d", rc);
+                return result;
+            }
+            PAL_VERBOSE(LOG_TAG, "config suppported");
+            result = true;
+            break;
         case PAL_STREAM_VOICE_CALL:
             channels = attributes->out_media_config.ch_info.channels;
             samplerate = attributes->out_media_config.sample_rate;
@@ -3531,6 +3560,12 @@ int ResourceManager::registerStream(Stream *s)
                 onVUIStreamRegistered();
             StreamSoundTrigger* sST = dynamic_cast<StreamSoundTrigger*>(s);
             ret = registerstream(sST, active_streams_st);
+            break;
+        }
+        case PAL_STREAM_ASR:
+        {
+            StreamASR* sASR = dynamic_cast<StreamASR*>(s);
+            ret = registerstream(sASR, active_streams_asr);
             break;
         }
         case PAL_STREAM_ULTRA_LOW_LATENCY:
@@ -3725,6 +3760,12 @@ int ResourceManager::deregisterStream(Stream *s)
             if (active_streams_st.size() == 0) {
                 onVUIStreamDeregistered();
             }
+            break;
+        }
+        case PAL_STREAM_ASR:
+        {
+            StreamASR* sASR = dynamic_cast<StreamASR*>(s);
+            ret = deregisterstream(sASR, active_streams_asr);
             break;
         }
         case PAL_STREAM_ULTRA_LOW_LATENCY:
@@ -4634,42 +4675,18 @@ void ResourceManager::GetVoiceUIProperties(struct pal_st_properties *qstp)
     }
 }
 
-bool ResourceManager::isNLPISwitchSupported(pal_stream_type_t type) {
-    switch (type) {
-        case PAL_STREAM_VOICE_UI:
-        case PAL_STREAM_ACD:
-        case PAL_STREAM_SENSOR_PCM_DATA: {
-            std::shared_ptr<SoundTriggerPlatformInfo> st_info =
-                SoundTriggerPlatformInfo::GetInstance();
+bool ResourceManager::isNLPISwitchSupported() {
 
-            if (st_info)
-                return st_info->GetSupportNLPISwitch();
-
-            break;
-        }
-        default:
-            break;
-    }
-    return false;
+    std::shared_ptr<SoundTriggerPlatformInfo> st_info =
+                             SoundTriggerPlatformInfo::GetInstance();
+    return st_info != nullptr ? st_info->GetSupportNLPISwitch() : false;
 }
 
-bool ResourceManager::IsLPISupported(pal_stream_type_t type) {
-    switch (type) {
-        case PAL_STREAM_VOICE_UI:
-        case PAL_STREAM_ACD:
-        case PAL_STREAM_SENSOR_PCM_DATA: {
-            std::shared_ptr<SoundTriggerPlatformInfo> st_info =
-                SoundTriggerPlatformInfo::GetInstance();
+bool ResourceManager::IsLPISupported() {
 
-            if (st_info)
-                return st_info->GetLpiEnable();
-
-            break;
-        }
-        default:
-            break;
-    }
-    return false;
+    std::shared_ptr<SoundTriggerPlatformInfo> st_info =
+                             SoundTriggerPlatformInfo::GetInstance();
+    return st_info != nullptr ? st_info->GetLpiEnable() : false;
 }
 
 bool ResourceManager::IsDedicatedBEForUPDEnabled()
@@ -4712,11 +4729,11 @@ void ResourceManager::GetSoundTriggerConcurrencyCount_l(
     int32_t *enable_count, int32_t *disable_count) {
 
     pal_stream_attributes st_attr;
-    bool voice_conc_enable = IsVoiceCallConcurrencySupported(type);
-    bool voip_conc_enable = IsVoipConcurrencySupported(type);
+    bool voice_conc_enable = IsVoiceCallConcurrencySupported();
+    bool voip_conc_enable = IsVoipConcurrencySupported();
     bool audio_capture_conc_enable =
-        IsAudioCaptureConcurrencySupported(type);
-    bool low_latency_bargein_enable = IsLowLatencyBargeinSupported(type);
+        IsAudioCaptureConcurrencySupported();
+    bool low_latency_bargein_enable = IsLowLatencyBargeinSupported();
 
     if (type == PAL_STREAM_ACD) {
         *enable_count = ACDConcurrencyEnableCount;
@@ -4724,6 +4741,9 @@ void ResourceManager::GetSoundTriggerConcurrencyCount_l(
     } else if (type == PAL_STREAM_VOICE_UI) {
         *enable_count = concurrencyEnableCount;
         *disable_count = concurrencyDisableCount;
+    } else if (type == PAL_STREAM_ASR) {
+        *enable_count = ASRConcurrencyEnableCount;
+        *disable_count = ASRConcurrencyDisableCount;
     } else if (type == PAL_STREAM_SENSOR_PCM_DATA) {
         *enable_count = SNSPCMDataConcurrencyEnableCount;
         *disable_count = SNSPCMDataConcurrencyDisableCount;
@@ -4736,85 +4756,35 @@ void ResourceManager::GetSoundTriggerConcurrencyCount_l(
         *enable_count, *disable_count);
 }
 
-bool ResourceManager::IsLowLatencyBargeinSupported(pal_stream_type_t type) {
-    switch (type) {
-        case PAL_STREAM_VOICE_UI:
-        case PAL_STREAM_ACD:
-        case PAL_STREAM_SENSOR_PCM_DATA: {
-            std::shared_ptr<SoundTriggerPlatformInfo> st_info =
+bool ResourceManager::IsLowLatencyBargeinSupported() {
+    std::shared_ptr<SoundTriggerPlatformInfo> st_info =
                 SoundTriggerPlatformInfo::GetInstance();
-
-            if (st_info)
-                return st_info->GetLowLatencyBargeinEnable();
-
-            break;
-        }
-        default:
-            break;
-    }
-    return false;
+    return st_info != nullptr ? st_info->GetLowLatencyBargeinEnable() : false;
 }
 
-bool ResourceManager::IsAudioCaptureConcurrencySupported(pal_stream_type_t type) {
-    switch (type) {
-        case PAL_STREAM_VOICE_UI:
-        case PAL_STREAM_ACD:
-        case PAL_STREAM_SENSOR_PCM_DATA: {
-            std::shared_ptr<SoundTriggerPlatformInfo> st_info =
+bool ResourceManager::IsAudioCaptureConcurrencySupported() {
+    std::shared_ptr<SoundTriggerPlatformInfo> st_info =
                 SoundTriggerPlatformInfo::GetInstance();
-
-            if (st_info)
-                return st_info->GetConcurrentCaptureEnable();
-
-            break;
-        }
-        default:
-            break;
-    }
-    return false;
+    return st_info != nullptr ? st_info->GetConcurrentCaptureEnable() : false;
 }
 
-bool ResourceManager::IsVoiceCallConcurrencySupported(pal_stream_type_t type) {
-    switch (type) {
-        case PAL_STREAM_VOICE_UI:
-        case PAL_STREAM_ACD:
-        case PAL_STREAM_SENSOR_PCM_DATA: {
-            std::shared_ptr<SoundTriggerPlatformInfo> st_info =
+bool ResourceManager::IsVoiceCallConcurrencySupported() {
+    std::shared_ptr<SoundTriggerPlatformInfo> st_info =
                 SoundTriggerPlatformInfo::GetInstance();
 
-            if (st_info)
-                /* if CRS call allow concurrency*/
-                if(isCRSCallEnabled){
-                    PAL_INFO(LOG_TAG, "In CRS call, allow voice concurrency");
-                    return true;
-                }
-                return st_info->GetConcurrentVoiceCallEnable();
-
-            break;
-        }
-        default:
-            break;
+    /* if CRS call allow concurrency*/
+    if (isCRSCallEnabled){
+        PAL_INFO(LOG_TAG, "In CRS call, allow voice concurrency");
+        return true;
     }
-    return false;
+
+    return st_info != nullptr ? st_info->GetConcurrentVoiceCallEnable() : false;
 }
 
-bool ResourceManager::IsVoipConcurrencySupported(pal_stream_type_t type) {
-    switch (type) {
-        case PAL_STREAM_VOICE_UI:
-        case PAL_STREAM_ACD:
-        case PAL_STREAM_SENSOR_PCM_DATA: {
-            std::shared_ptr<SoundTriggerPlatformInfo> st_info =
+bool ResourceManager::IsVoipConcurrencySupported() {
+    std::shared_ptr<SoundTriggerPlatformInfo> st_info =
                 SoundTriggerPlatformInfo::GetInstance();
-
-            if (st_info)
-                return st_info->GetConcurrentVoipCallEnable();
-
-            break;
-        }
-        default:
-            break;
-    }
-    return false;
+    return st_info != nullptr ? st_info->GetConcurrentVoipCallEnable() : false;
 }
 
 bool ResourceManager::IsTransitToNonLPIOnChargingSupported() {
@@ -4832,6 +4802,34 @@ bool ResourceManager::CheckForForcedTransitToNonLPI() {
       return true;
 
     return false;
+}
+
+std::shared_ptr<CaptureProfile> ResourceManager::GetASRCaptureProfileByPriority(
+    StreamASR *s, std::shared_ptr<CaptureProfile> cap_prof_priority,
+    std::string backend) {
+    std::shared_ptr<CaptureProfile> cap_prof = nullptr;
+
+    for (auto& str: active_streams_asr) {
+        if (str == s) {
+            continue;
+        }
+
+        if (!str->isActive())
+            continue;
+
+        cap_prof = str->GetCurrentCaptureProfile();
+        if (!cap_prof) {
+            PAL_ERR(LOG_TAG, "Failed to get capture profile");
+            continue;
+        } else if (cap_prof->GetBackend().compare(backend) != 0) {
+            continue;
+        } else if (cap_prof->ComparePriority(cap_prof_priority) >=
+                   CAPTURE_PROFILE_PRIORITY_HIGH) {
+            cap_prof_priority = cap_prof;
+        }
+    }
+
+    return cap_prof_priority;
 }
 
 std::shared_ptr<CaptureProfile> ResourceManager::GetACDCaptureProfileByPriority(
@@ -4935,6 +4933,7 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetCaptureProfileByPriority(
     struct pal_stream_attributes sAttr;
     StreamSoundTrigger *st_st = nullptr;
     StreamACD *st_acd = nullptr;
+    StreamASR *st_asr = nullptr;
     StreamSensorPCMData *st_sns_pcm_data = nullptr;
     std::shared_ptr<CaptureProfile> cap_prof_priority = nullptr;
     int32_t status = 0;
@@ -4952,12 +4951,15 @@ std::shared_ptr<CaptureProfile> ResourceManager::GetCaptureProfileByPriority(
         st_st = dynamic_cast<StreamSoundTrigger*>(s);
     else if (sAttr.type == PAL_STREAM_ACD)
         st_acd = dynamic_cast<StreamACD*>(s);
+    else if (sAttr.type == PAL_STREAM_ASR)
+        st_asr = dynamic_cast<StreamASR*>(s);
     else
         st_sns_pcm_data = dynamic_cast<StreamSensorPCMData*>(s);
 
 get_priority:
     cap_prof_priority = GetSVACaptureProfileByPriority(st_st, cap_prof_priority, backend);
     cap_prof_priority = GetACDCaptureProfileByPriority(st_acd, cap_prof_priority, backend);
+    cap_prof_priority = GetASRCaptureProfileByPriority(st_asr, cap_prof_priority, backend);
     return GetSPDCaptureProfileByPriority(st_sns_pcm_data, cap_prof_priority, backend);
 }
 
@@ -4970,6 +4972,7 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
     struct pal_stream_attributes sAttr;
     StreamSoundTrigger *st_st = nullptr;
     StreamACD *st_acd = nullptr;
+    StreamASR *st_asr = nullptr;
     StreamSensorPCMData *st_sns_pcm_data = nullptr;
     int32_t status = 0;
 
@@ -4988,6 +4991,8 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
         st_st = dynamic_cast<StreamSoundTrigger*>(s);
     else if (sAttr.type == PAL_STREAM_ACD)
         st_acd = dynamic_cast<StreamACD*>(s);
+    else if (sAttr.type == PAL_STREAM_ASR)
+        st_asr = dynamic_cast<StreamASR*>(s);
     else if (sAttr.type == PAL_STREAM_SENSOR_PCM_DATA)
         st_sns_pcm_data = dynamic_cast<StreamSensorPCMData*>(s);
     else {
@@ -5000,6 +5005,8 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
             cap_prof = st_st->GetCurrentCaptureProfile();
         else if (sAttr.type == PAL_STREAM_ACD)
             cap_prof = st_acd->GetCurrentCaptureProfile();
+        else if (sAttr.type == PAL_STREAM_ASR)
+            cap_prof = st_asr->GetCurrentCaptureProfile();
         else
             cap_prof = st_sns_pcm_data->GetCurrentCaptureProfile();
 
@@ -5057,7 +5064,7 @@ void ResourceManager::SwitchSoundTriggerDevices(bool connect_state,
     PAL_DBG(LOG_TAG, "Enter");
 
     /*
-     * Voice UI, ACD and Sensor PCM Data(SPD)
+     * Voice UI, ACD, ASR and Sensor PCM Data(SPD)
      * share the sound trigger platform info.
      */
     st_info = SoundTriggerPlatformInfo::GetInstance();
@@ -5104,6 +5111,8 @@ void ResourceManager::SwitchSoundTriggerDevices(bool connect_state,
         st_streams.push_back(PAL_STREAM_VOICE_UI);
     if (active_streams_acd.size())
         st_streams.push_back(PAL_STREAM_ACD);
+    if (active_streams_asr.size())
+        st_streams.push_back(PAL_STREAM_ASR);
     if (active_streams_sensor_pcm_data.size())
         st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
 
@@ -5345,6 +5354,8 @@ int ResourceManager::HandleDetectionStreamAction(pal_stream_type_t type, int32_t
          !active_streams_st.size()) ||
         (type == PAL_STREAM_ACD &&
          !active_streams_acd.size()) ||
+        (type == PAL_STREAM_ASR &&
+         !active_streams_asr.size()) ||
         (type == PAL_STREAM_SENSOR_PCM_DATA &&
          !active_streams_sensor_pcm_data.size())) {
         PAL_VERBOSE(LOG_TAG, "No active stream for type %d, skip action", type);
@@ -5424,6 +5435,7 @@ int ResourceManager::HandleDetectionStreamAction(pal_stream_type_t type, int32_t
 int ResourceManager::StopOtherDetectionStreams(void *st) {
     HandleDetectionStreamAction(PAL_STREAM_VOICE_UI, ST_INTERNAL_PAUSE, st);
     HandleDetectionStreamAction(PAL_STREAM_ACD, ST_PAUSE, st);
+    HandleDetectionStreamAction(PAL_STREAM_ASR, ST_PAUSE, st);
     HandleDetectionStreamAction(PAL_STREAM_SENSOR_PCM_DATA, ST_PAUSE, st);
     return 0;
 }
@@ -5431,6 +5443,7 @@ int ResourceManager::StopOtherDetectionStreams(void *st) {
 int ResourceManager::StartOtherDetectionStreams(void *st) {
     HandleDetectionStreamAction(PAL_STREAM_VOICE_UI, ST_INTERNAL_RESUME, st);
     HandleDetectionStreamAction(PAL_STREAM_ACD, ST_RESUME, st);
+    HandleDetectionStreamAction(PAL_STREAM_ASR, ST_RESUME, st);
     HandleDetectionStreamAction(PAL_STREAM_SENSOR_PCM_DATA, ST_RESUME, st);
     return 0;
 }
@@ -5439,10 +5452,10 @@ void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
                          pal_stream_type_t in_type, pal_stream_direction_t dir,
                          bool *rx_conc, bool *tx_conc, bool *conc_en)
 {
-    bool voice_conc_enable = IsVoiceCallConcurrencySupported(st_type);
-    bool voip_conc_enable = IsVoipConcurrencySupported(st_type);
-    bool low_latency_bargein_enable = IsLowLatencyBargeinSupported(st_type);
-    bool audio_capture_conc_enable = IsAudioCaptureConcurrencySupported(st_type);
+    bool voice_conc_enable = IsVoiceCallConcurrencySupported();
+    bool voip_conc_enable = IsVoipConcurrencySupported();
+    bool low_latency_bargein_enable = IsLowLatencyBargeinSupported();
+    bool audio_capture_conc_enable = IsAudioCaptureConcurrencySupported();
 
     if (dir == PAL_AUDIO_OUTPUT) {
         if (in_type == PAL_STREAM_LOW_LATENCY && !low_latency_bargein_enable) {
@@ -5480,7 +5493,8 @@ void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
                (in_type != PAL_STREAM_ACD &&
                 in_type != PAL_STREAM_SENSOR_PCM_DATA &&
                 in_type != PAL_STREAM_CONTEXT_PROXY  &&
-                in_type != PAL_STREAM_VOICE_UI)) {
+                in_type != PAL_STREAM_VOICE_UI &&
+                in_type != PAL_STREAM_ASR)) {
         *tx_conc = true;
         if (!audio_capture_conc_enable && in_type != PAL_STREAM_PROXY) {
             PAL_DBG(LOG_TAG, "pause on audio capture concurrency");
@@ -5507,6 +5521,8 @@ void ResourceManager::HandleStreamPauseResume(pal_stream_type_t st_type, bool ac
 
     if (st_type == PAL_STREAM_ACD)
         local_dis_count = &ACDConcurrencyDisableCount;
+    else if (st_type == PAL_STREAM_ASR)
+        local_dis_count = &ASRConcurrencyDisableCount;
     else if (st_type == PAL_STREAM_VOICE_UI)
         local_dis_count = &concurrencyDisableCount;
     else if (st_type == PAL_STREAM_SENSOR_PCM_DATA)
@@ -5527,6 +5543,27 @@ void ResourceManager::HandleStreamPauseResume(pal_stream_type_t st_type, bool ac
             HandleDetectionStreamAction(st_type, ST_RESUME, NULL);
         }
     }
+}
+
+void ResourceManager::forceSwitchSoundTriggerStreams(bool active) {
+
+    mActiveStreamMutex.lock();
+    std::vector<pal_stream_type_t> st_streams;
+
+    if (active_streams_st.size())
+        st_streams.push_back(PAL_STREAM_VOICE_UI);
+    if (active_streams_acd.size())
+        st_streams.push_back(PAL_STREAM_ACD);
+    if (active_streams_sensor_pcm_data.size())
+        st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
+
+    if (checkAndUpdateDeferSwitchState(active)) {
+        PAL_DBG(LOG_TAG, "Switch is deferred");
+    } else {
+        handleConcurrentStreamSwitch(st_streams);
+    }
+
+    mActiveStreamMutex.unlock();
 }
 
 /* This function should be called with mActiveStreamMutex lock acquired */
@@ -5596,7 +5633,7 @@ bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
      *    and exit the sleep in voiceUIDeferredSwitchLoop.
      */
     if (!stream_active) {
-        if (IsLowLatencyBargeinSupported(PAL_STREAM_VOICE_UI)) {
+        if (IsLowLatencyBargeinSupported()) {
             deferredSwitchState =
                 (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) ? NO_DEFER :
                  DEFER_NLPI_LPI_SWITCH;
@@ -5626,7 +5663,7 @@ bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
                 deferredSwitchState);
             return true;
         }
-        if (IsLowLatencyBargeinSupported(PAL_STREAM_VOICE_UI) &&
+        if (IsLowLatencyBargeinSupported() &&
             deferredSwitchState == DEFER_NLPI_LPI_SWITCH) {
             deferredSwitchState = NO_DEFER;
             deferred_switch_cnt_ = -1;
@@ -5696,6 +5733,8 @@ void ResourceManager::handleDeferredSwitch()
             st_streams.push_back(PAL_STREAM_VOICE_UI);
         if (active_streams_acd.size())
             st_streams.push_back(PAL_STREAM_ACD);
+        if (active_streams_asr.size())
+            st_streams.push_back(PAL_STREAM_ASR);
         if (active_streams_sensor_pcm_data.size())
             st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
 
@@ -5743,6 +5782,7 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
 
     st_streams.push_back(PAL_STREAM_VOICE_UI);
     st_streams.push_back(PAL_STREAM_ACD);
+    st_streams.push_back(PAL_STREAM_ASR);
     st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
 
     for (pal_stream_type_t st_stream_type : st_streams) {
@@ -5763,13 +5803,13 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
                 TxconcurrencyEnableCount--;
         }
         if (st_stream_conc_en && (st_stream_tx_conc || st_stream_rx_conc)) {
-            if (!IsLPISupported(st_stream_type) ||
-                !isNLPISwitchSupported(st_stream_type)) {
+            if (!IsLPISupported() || !isNLPISwitchSupported()) {
                 PAL_INFO(LOG_TAG,
                          "Skip switch as st_stream %d LPI disabled/NLPI switch disabled", st_stream_type);
             } else if (active) {
                 if ((PAL_STREAM_VOICE_UI == st_stream_type && ++concurrencyEnableCount == 1) ||
                     (PAL_STREAM_ACD == st_stream_type && ++ACDConcurrencyEnableCount == 1) ||
+                    (PAL_STREAM_ASR == st_stream_type && ++ASRConcurrencyEnableCount == 1) ||
                     (PAL_STREAM_SENSOR_PCM_DATA == st_stream_type && ++SNSPCMDataConcurrencyEnableCount == 1)) {
                     if (use_lpi_temp) {
                         do_st_stream_switch = true;
@@ -5779,6 +5819,7 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
             } else {
                 if ((PAL_STREAM_VOICE_UI == st_stream_type && --concurrencyEnableCount == 0) ||
                     (PAL_STREAM_ACD == st_stream_type && --ACDConcurrencyEnableCount == 0) ||
+                    (PAL_STREAM_ASR == st_stream_type && --ASRConcurrencyEnableCount == 0) ||
                     (PAL_STREAM_SENSOR_PCM_DATA == st_stream_type && --SNSPCMDataConcurrencyEnableCount == 0)) {
                     if (!(active_streams_st.size() && charging_state_ && IsTransitToNonLPIOnChargingSupported())) {
                         do_st_stream_switch = true;
@@ -5802,6 +5843,8 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
         concurrencyEnableCount = 0;
     if (ACDConcurrencyEnableCount < 0)
         ACDConcurrencyEnableCount = 0;
+    if (ASRConcurrencyEnableCount < 0)
+        ASRConcurrencyEnableCount = 0;
     if (SNSPCMDataConcurrencyEnableCount < 0)
         SNSPCMDataConcurrencyEnableCount = 0;
 
@@ -7093,6 +7136,7 @@ const std::vector<int> ResourceManager::allocateFrontEndIds(const struct pal_str
         case PAL_STREAM_VOIP_TX:
         case PAL_STREAM_VOICE_UI:
         case PAL_STREAM_ACD:
+        case PAL_STREAM_ASR:
         case PAL_STREAM_PCM_OFFLOAD:
         case PAL_STREAM_LOOPBACK:
         case PAL_STREAM_PROXY:
@@ -7395,6 +7439,7 @@ void ResourceManager::freeFrontEndIds(const std::vector<int> frontend,
         case PAL_STREAM_VOICE_UI:
         case PAL_STREAM_LOOPBACK:
         case PAL_STREAM_ACD:
+        case PAL_STREAM_ASR:
         case PAL_STREAM_PCM_OFFLOAD:
         case PAL_STREAM_HAPTICS:
         case PAL_STREAM_ULTRASOUND:
@@ -8371,7 +8416,8 @@ bool ResourceManager::updateDeviceConfig(std::shared_ptr<Device> *inDev,
      * to it receives device configurations from Sensor clients.
      */
     if (inStrAttr->type == PAL_STREAM_ACD ||
-        inStrAttr->type == PAL_STREAM_VOICE_UI)
+        inStrAttr->type == PAL_STREAM_VOICE_UI ||
+        inStrAttr->type == PAL_STREAM_ASR)
         goto error;
 
     if (strlen(inDevAttr->custom_config.custom_key))
@@ -11967,6 +12013,8 @@ void ResourceManager::onChargingStateChange()
             st_streams.push_back(PAL_STREAM_VOICE_UI);
         if (active_streams_acd.size())
             st_streams.push_back(PAL_STREAM_ACD);
+        if (active_streams_asr.size())
+            st_streams.push_back(PAL_STREAM_ASR);
         if (active_streams_sensor_pcm_data.size())
             st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
 
