@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -194,7 +194,9 @@ int32_t StreamSensorPCMData::start()
             goto exit;
         }
 
+        rm->voteSleepMonitor(this, true);
         status = device->open();
+        rm->voteSleepMonitor(this, false);
         if (0 != status) {
             PAL_ERR(LOG_TAG, "Error: device [%d] open failed with status %d",
                     device->getSndDeviceId(), status);
@@ -325,7 +327,7 @@ int32_t StreamSensorPCMData::stop()
     return status;
 }
 
-int32_t StreamSensorPCMData::Resume()
+int32_t StreamSensorPCMData::Resume(bool is_internal)
 {
     int32_t status = 0;
 
@@ -340,7 +342,7 @@ int32_t StreamSensorPCMData::Resume()
     return status;
 }
 
-int32_t StreamSensorPCMData::Pause()
+int32_t StreamSensorPCMData::Pause(bool is_internal)
 {
     int32_t status = 0;
 
@@ -721,7 +723,9 @@ int32_t StreamSensorPCMData::ConnectDevice_l(pal_device_id_t device_id)
         goto connect_err;
     }
 
+    rm->voteSleepMonitor(this, true);
     status = device->open();
+    rm->voteSleepMonitor(this, false);
     if (0 != status) {
         PAL_ERR(LOG_TAG, "Error:%d device %d open failed", status,
                 device->getSndDeviceId());

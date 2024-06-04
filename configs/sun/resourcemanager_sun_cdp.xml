@@ -92,6 +92,7 @@
         <low_power_stream_type>PAL_STREAM_SENSOR_PCM_DATA</low_power_stream_type>
         <avoid_vote_stream_type>PAL_STREAM_CONTEXT_PROXY</avoid_vote_stream_type>
     </sleep_monitor_vote_streams>
+    <perf_lock library="libqti-perfd-client.so" config="0x40400000, 0x1, 0x40800000, 0x514" />
     <group_device_cfg>
         <upd_rx>
             <snd_device name="handset" />

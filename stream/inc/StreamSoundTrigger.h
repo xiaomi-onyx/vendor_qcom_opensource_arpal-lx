@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -95,6 +95,8 @@ enum {
     ST_EV_SSR_ONLINE,
     ST_EV_CONCURRENT_STREAM,
     ST_EV_EC_REF,
+    ST_EV_INTERNAL_PAUSE,
+    ST_EV_INTERNAL_RESUME,
 };
 
 class ResourceManager;
@@ -162,8 +164,8 @@ public:
         pal_device_id_t dev_id) override;
     int connectStreamDevice_l(Stream* streamHandle,
         struct pal_device *dattr) override;
-    int32_t Resume() override;
-    int32_t Pause() override;
+    int32_t Resume(bool is_internal = false) override;
+    int32_t Pause(bool is_internal = false) override;
     int32_t GetCurrentStateId();
     int32_t HandleConcurrentStream(bool active);
     int32_t setECRef(std::shared_ptr<Device> dev, bool is_enable) override;
@@ -180,8 +182,9 @@ public:
     void SetModelId(uint32_t model_id) { model_id_ = model_id; }
     uint32_t GetInstanceId();
     bool IsStreamInBuffering() {
-       return capture_requested_ && reader_ && reader_->isEnabled() &&
-              (GetCurrentStateId() == ST_STATE_BUFFERING);
+       return (capture_requested_ && reader_ &&
+              (GetCurrentStateId() == ST_STATE_BUFFERING)) &&
+              (reader_->isEnabled() || reader_->isPrepared());
     }
     struct st_uuid GetVendorUuid();
     void *GetGSLEngine() {
@@ -369,6 +372,18 @@ private:
      public:
         StResumeEventConfig() : StEventConfig(ST_EV_RESUME) { }
         ~StResumeEventConfig() {}
+    };
+
+    class StInternalPauseEventConfig : public StEventConfig {
+     public:
+        StInternalPauseEventConfig() : StEventConfig(ST_EV_INTERNAL_PAUSE) { }
+        ~StInternalPauseEventConfig() {}
+    };
+
+    class StInternalResumeEventConfig : public StEventConfig {
+     public:
+        StInternalResumeEventConfig() : StEventConfig(ST_EV_INTERNAL_RESUME) { }
+        ~StInternalResumeEventConfig() {}
     };
 
     class StECRefEventConfigData : public StEventConfigData {
