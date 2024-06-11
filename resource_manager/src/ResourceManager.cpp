@@ -10867,6 +10867,7 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
             if (payload_size == sizeof(pal_haptics_payload)) {
                 switch(hapModeVal->operationMode) {
                     case PAL_HAP_MODE_FACTORY_TEST:
+                    case PAL_HAP_MODE_DYNAMIC_CAL:
                     {
                         struct pal_device dattr;
                         dattr.id = PAL_DEVICE_OUT_HAPTICS_DEVICE;
@@ -10875,12 +10876,13 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                         memset (&mHapticsModeValue, 0,
                                         sizeof(pal_haptics_payload));
                         mHapticsModeValue.operationMode =
-                                PAL_HAP_MODE_FACTORY_TEST;
+                                hapModeVal->operationMode;
 
                         dev = Device::getInstance(&dattr , rm);
                         if (dev) {
-                            PAL_DBG(LOG_TAG, "Got Haptics Device Instance");
-                            dev->setParameter(PAL_HAP_MODE_FACTORY_TEST, nullptr);
+                            PAL_DBG(LOG_TAG, "Got Haptics Device Instance, mode:%d",
+                                                          hapModeVal->operationMode);
+                            dev->setParameter(hapModeVal->operationMode, nullptr);
                         }
                         else {
                             PAL_DBG(LOG_TAG, "Unable to get haptics device instance");
