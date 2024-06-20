@@ -556,9 +556,9 @@ bool ResourceManager::isUPDVirtualPortEnabled = false;
 bool ResourceManager::isCPEnabled = false;
 bool ResourceManager::isDummyDevEnabled = false;
 bool ResourceManager::isProxyRecordActive = false;
+bool ResourceManager::isSilenceDetectionEnabled = false;
 int ResourceManager::max_voice_vol = -1;     /* Variable to store max volume index for voice call */
 bool ResourceManager::isSignalHandlerEnabled = false;
-bool ResourceManager::a2dp_suspended = false;
 static int haptics_priority;
 bool ResourceManager::isHapticsthroughWSA = false;
 bool ResourceManager::isCRSCallEnabled = false;
@@ -7900,9 +7900,7 @@ int ResourceManager::findActiveStreamsNotInDisconnectList(
 
     mActiveStreamMutex.lock();
 
-    ret = rm->getActiveStream_l(activeStreams, devObj);
-    if (ret)
-        goto done;
+    rm->getActiveStream_l(activeStreams, devObj);
 
     PAL_DBG(LOG_TAG, "activeStreams size = %d, device: %s", activeStreams.size(),
             deviceNameLUT.at((pal_device_id_t)devObj->getSndDeviceId()).c_str());
@@ -8170,11 +8168,6 @@ int32_t ResourceManager::streamDevSwitch(std::vector <std::tuple<Stream *, uint3
 
     PAL_INFO(LOG_TAG, "Enter");
 
-    if (PAL_CARD_STATUS_DOWN(cardState)) {
-        PAL_ERR(LOG_TAG, "Sound card is offline/standby");
-        status = -EINVAL;
-        goto exit_no_unlock;
-    }
     mActiveStreamMutex.lock();
 
     SortAndUnique(streamDevDisconnectList);
@@ -9529,8 +9522,7 @@ int32_t ResourceManager::a2dpResumeFromDummy(pal_device_id_t dev_id)
             if ((devices.size() > 0) &&
                 ((*sIter)->suspendedDevIds.size() == 1 /* non combo */)) {
                 for (auto device: devices) {
-                    if ((device->getSndDeviceId() > PAL_DEVICE_OUT_MIN &&
-                        device->getSndDeviceId() < PAL_DEVICE_OUT_MAX)) {
+                    if (isValidDevId((pal_device_id_t)device->getSndDeviceId())) {
                         streamDevDisconnect.push_back({*sIter, device->getSndDeviceId()});
                     }
                 }
@@ -9576,24 +9568,24 @@ int32_t ResourceManager::a2dpResumeFromDummy(pal_device_id_t dev_id)
             if (((*sIter) != NULL) && isStreamActive(*sIter, mActiveStreams)) {
                 (*sIter)->lockStreamMutex();
                 if (std::find((*sIter)->suspendedDevIds.begin(), (*sIter)->suspendedDevIds.end(),
-                    a2dpDattr.id) != (*sIter)->suspendedDevIds.end()) {
+                        a2dpDattr.id) != (*sIter)->suspendedDevIds.end()) {
                     if ((*sIter)->suspendedDevIds.size() == 1 /* non-combo */) {
-                        (*sIter)->clearmDevices();
-                        (*sIter)->clearOutPalDevices(*sIter);
+                        (*sIter)->removemDevice(activeDattr.id);
+                        (*sIter)->removePalDevice(*sIter, activeDattr.id);
                     }
-                    (*sIter)->addmDevice(&a2dpDattr);
-                    (*sIter)->addPalDevice(*sIter, &a2dpDattr);
                 } else if (std::find((*sIter)->suspendedDevIds.begin(), (*sIter)->suspendedDevIds.end(),
                                    PAL_DEVICE_OUT_BLUETOOTH_SCO) != (*sIter)->suspendedDevIds.end()) {
                     (*sIter)->removemDevice(PAL_DEVICE_OUT_BLUETOOTH_SCO);
                     (*sIter)->removePalDevice(*sIter, PAL_DEVICE_OUT_BLUETOOTH_SCO);
-                    (*sIter)->addmDevice(&a2dpDattr);
-                    (*sIter)->addPalDevice(*sIter, &a2dpDattr);
                 }
+                (*sIter)->addmDevice(&a2dpDattr);
+                (*sIter)->addPalDevice(*sIter, &a2dpDattr);
+                (*sIter)->a2dpMuted = false;
                 (*sIter)->unlockStreamMutex();
             }
         }
         mActiveStreamMutex.unlock();
+        goto exit;
     } else {
         PAL_DBG(LOG_TAG, "restoring a2dp/ble stream");
         status = streamDevSwitch(streamDevDisconnect, streamDevConnect);
@@ -9608,8 +9600,10 @@ int32_t ResourceManager::a2dpResumeFromDummy(pal_device_id_t dev_id)
         if (((*sIter) != NULL) && isStreamActive(*sIter, mActiveStreams)) {
             (*sIter)->lockStreamMutex();
             // update PAL devices for the restored streams
-            if ((*sIter)->suspendedDevIds.size() == 1 /* non-combo */) {
-                (*sIter)->clearOutPalDevices(*sIter);
+            if (std::find((*sIter)->suspendedDevIds.begin(), (*sIter)->suspendedDevIds.end(),
+                    a2dpDattr.id) != (*sIter)->suspendedDevIds.end()) {
+                if ((*sIter)->suspendedDevIds.size() == 1 /* non-combo */)
+                    (*sIter)->removePalDevice(*sIter, activeDattr.id);
             } else if (std::find((*sIter)->suspendedDevIds.begin(), (*sIter)->suspendedDevIds.end(),
                                PAL_DEVICE_OUT_BLUETOOTH_SCO) != (*sIter)->suspendedDevIds.end()) {
                 (*sIter)->removePalDevice(*sIter, PAL_DEVICE_OUT_BLUETOOTH_SCO);
@@ -10447,12 +10441,7 @@ int ResourceManager::getParameter(uint32_t param_id, void **param_payload,
             std::shared_ptr<Device> dev = nullptr;
             struct pal_device dattr;
             pal_param_bta2dp_t* param_bt_a2dp = nullptr;
-
-            if (isDeviceAvailable((*(pal_param_bta2dp_t**)param_payload)->dev_id)) {
-                dattr.id = (*(pal_param_bta2dp_t**)param_payload)->dev_id;
-            } else {
-                goto exit;
-            }
+            dattr.id = (*(pal_param_bta2dp_t**)param_payload)->dev_id;
 
             dev = Device::getInstance(&dattr, rm);
             if (dev) {
@@ -10763,7 +10752,6 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
             std::shared_ptr<Device> dev = nullptr;
             struct pal_device dattr;
             pal_device_id_t st_device;
-            pal_param_bta2dp_t param_bt_a2dp;
 
             PAL_INFO(LOG_TAG, "Device %d connected = %d",
                         device_connection->id,
@@ -10777,26 +10765,8 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                     device_connection->id == PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
                     dattr.id = device_connection->id;
                     dev = Device::getInstance(&dattr, rm);
-                    if (dev) {
+                    if (dev)
                         status = dev->setDeviceParameter(param_id, param_payload);
-                        /* Set a2dp_suspended true if it is set to true before device
-                         * connection, and reset it at device device disconnection
-                         */
-                        if (!status && a2dp_suspended &&
-                            device_connection->id == PAL_DEVICE_OUT_BLUETOOTH_A2DP) {
-                           if (device_connection->connection_state) {
-                               param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
-                               param_bt_a2dp.a2dp_suspended = true;
-                               PAL_DBG(LOG_TAG, "Applying cached a2dp_suspended true param");
-                               mResourceManagerMutex.unlock();
-                               status = dev->setDeviceParameter(PAL_PARAM_ID_BT_A2DP_SUSPENDED,
-                                                                &param_bt_a2dp);
-                               mResourceManagerMutex.lock();
-                           } else {
-                               a2dp_suspended = false;
-                           }
-                        }
-                    }
                 } else {
                     /* Handle device switch for Sound Trigger streams */
                     if (device_connection->id == PAL_DEVICE_IN_WIRED_HEADSET) {
@@ -10994,7 +10964,7 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
         break;
         case PAL_PARAM_ID_BT_A2DP_RECONFIG:
         {
-            std::shared_ptr<Device> dev = nullptr;
+            std::shared_ptr<BtA2dp> a2dp_dev = nullptr;
             std::vector <Stream *> activeA2dpStreams;
             struct pal_device dattr;
             pal_param_bta2dp_t *current_param_bt_a2dp = nullptr;
@@ -11004,22 +10974,29 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
 
             if (isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
                 dattr.id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
-                dev = Device::getInstance(&dattr, rm);
-                if (!dev) {
+                a2dp_dev = std::dynamic_pointer_cast<BtA2dp>
+                                (BtA2dp::getInstance(&dattr, rm));
+                if (!a2dp_dev) {
                     PAL_ERR(LOG_TAG, "Device getInstance failed");
                     status = -ENODEV;
                     goto exit;
                 }
 
-                getActiveStream_l(activeA2dpStreams, dev);
+                if (a2dp_dev->checkDeviceStatus() == A2DP_STATE_DISCONNECTED) {
+                    PAL_ERR(LOG_TAG, "failed to open A2dp source, skip a2dp reconfig.");
+                    status = -ENODEV;
+                    goto exit;
+                }
+
+                getActiveStream_l(activeA2dpStreams, a2dp_dev);
                 if (activeA2dpStreams.size() == 0) {
                     PAL_DBG(LOG_TAG, "no active a2dp stream available, skip a2dp reconfig.");
                     status = 0;
                     goto exit;
                 }
 
-                dev->setDeviceParameter(param_id, param_payload);
-                dev->getDeviceParameter(param_id, (void **)&current_param_bt_a2dp);
+                a2dp_dev->setDeviceParameter(param_id, param_payload);
+                a2dp_dev->getDeviceParameter(param_id, (void **)&current_param_bt_a2dp);
                 if ((current_param_bt_a2dp->reconfig == true) &&
                     (current_param_bt_a2dp->a2dp_suspended == false)) {
                     mResourceManagerMutex.unlock();
@@ -11040,7 +11017,7 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                     mResourceManagerMutex.lock();
 
                     param_bt_a2dp.reconfig = false;
-                    dev->setDeviceParameter(param_id, &param_bt_a2dp);
+                    a2dp_dev->setDeviceParameter(param_id, &param_bt_a2dp);
                 }
             }
         }
@@ -11051,23 +11028,11 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
             struct pal_device a2dp_dattr;
             pal_param_bta2dp_t *current_param_bt_a2dp = nullptr;
             pal_param_bta2dp_t *param_bt_a2dp = nullptr;
+            bool skip_switch = false;
 
             mResourceManagerMutex.unlock();
             param_bt_a2dp = (pal_param_bta2dp_t*)param_payload;
-
-            // Cache a2dpSuspended state for a2dp devices if it is coming from framework
-            if (param_bt_a2dp->dev_id == PAL_DEVICE_OUT_BLUETOOTH_A2DP &&
-                param_bt_a2dp->is_suspend_setparam)
-                a2dp_suspended = param_bt_a2dp->a2dp_suspended;
-
-            if (isDeviceAvailable(param_bt_a2dp->dev_id)) {
-                a2dp_dattr.id = param_bt_a2dp->dev_id;
-            } else {
-                PAL_ERR(LOG_TAG, "a2dp/ble device %d is unavailable, set param %d failed",
-                    param_bt_a2dp->dev_id, param_id);
-                status = -EIO;
-                goto exit_no_unlock;
-            }
+            a2dp_dattr.id = param_bt_a2dp->dev_id;
 
             a2dp_dev = Device::getInstance(&a2dp_dattr , rm);
             if (!a2dp_dev) {
@@ -11081,19 +11046,24 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
              * which is sent via reconfig_cb. Honouring the param in such scenario
              * will lead to incorrect stream state.
              */
-            if (current_param_bt_a2dp->a2dp_suspended && current_param_bt_a2dp->is_suspend_setparam &&
+            if (current_param_bt_a2dp->a2dp_suspended &&
+                current_param_bt_a2dp->is_suspend_setparam &&
                 !param_bt_a2dp->is_suspend_setparam) {
                 PAL_INFO(LOG_TAG, "suspend/resume from reconfig_cb ignored");
                 goto exit_no_unlock;
             }
 
-            if (current_param_bt_a2dp->a2dp_suspended == param_bt_a2dp->a2dp_suspended) {
+            if (current_param_bt_a2dp->a2dp_suspended ==
+                    param_bt_a2dp->a2dp_suspended) {
                 PAL_INFO(LOG_TAG, "A2DP/BLE already in requested state, ignoring");
                 goto exit_no_unlock;
             }
 
+            if (!isDeviceAvailable(param_bt_a2dp->dev_id))
+                skip_switch = true;
+
             if (ResourceManager::isDummyDevEnabled) {
-                if (param_bt_a2dp->a2dp_suspended == false) {
+                if (!skip_switch && param_bt_a2dp->a2dp_suspended == false) {
                     struct pal_device sco_tx_dattr = {};
                     struct pal_device sco_rx_dattr = {};
                     std::shared_ptr<Device> sco_tx_dev = nullptr;
@@ -11112,6 +11082,20 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                         getActiveStream_l(activestreams, sco_tx_dev);
                         mActiveStreamMutex.unlock();
                         if (activestreams.size() > 0) {
+                            /* Mark streams over IN_SCO, so as to give them chance
+                             * to resume over A2DP/BLE if a2dpCatureSuspend=false is
+                             * received at later stage.
+                             */
+                            for (sIter = activestreams.begin();
+                                     sIter != activestreams.end(); sIter++) {
+                                (*sIter)->suspendedDevIds.clear();
+                                if (isDeviceAvailable(PAL_DEVICE_IN_BLUETOOTH_A2DP))
+                                    (*sIter)->suspendedDevIds.
+                                                  push_back(PAL_DEVICE_IN_BLUETOOTH_A2DP);
+                                else if (isDeviceAvailable(PAL_DEVICE_IN_BLUETOOTH_BLE))
+                                    (*sIter)->suspendedDevIds.
+                                                  push_back(PAL_DEVICE_IN_BLUETOOTH_BLE);
+                            }
                             PAL_DBG(LOG_TAG, "a2dp resumed, switch bt sco mic to in_dummy device");
                             getDeviceConfig(&in_dummy_dattr, NULL);
                             rm->forceDeviceSwitch(sco_tx_dev, &in_dummy_dattr);
@@ -11138,16 +11122,19 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                                 (streamType == PAL_STREAM_SPATIAL_AUDIO) ||
                                 (streamType == PAL_STREAM_COMPRESSED) ||
                                 (streamType == PAL_STREAM_GENERIC)) {
-                                (*sIter)->suspendedDevIds.clear();
-                                (*sIter)->suspendedDevIds.push_back(PAL_DEVICE_OUT_BLUETOOTH_SCO);
-                                PAL_DBG(LOG_TAG, "a2dp resumed, mark sco streams as to route them later");
+                                if ((*sIter)->suspendedDevIds.empty()) {
+                                    (*sIter)->suspendedDevIds.
+                                        push_back(PAL_DEVICE_OUT_BLUETOOTH_SCO);
+                                    PAL_DBG(LOG_TAG, "a2dp resumed, \
+                                        mark sco streams as to route them later");
+                                }
                             }
                         }
                     }
                     mActiveStreamMutex.unlock();
                 }
             } else {
-                if (param_bt_a2dp->a2dp_suspended == false) {
+                if (!skip_switch && param_bt_a2dp->a2dp_suspended == false) {
                     struct pal_device sco_tx_dattr;
                     struct pal_device sco_rx_dattr;
                     std::shared_ptr<Device> sco_tx_dev = nullptr;
@@ -11168,6 +11155,20 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                         sco_tx_dev = Device::getInstance(&sco_tx_dattr, rm);
                         getActiveStream_l(activestreams, sco_tx_dev);
                         if (activestreams.size() > 0) {
+                            /* Mark streams over IN_SCO, so as to give them chance
+                             * to resume over A2DP/BLE if a2dpCatureSuspend=false is
+                             * received at later stage.
+                             */
+                            for (sIter = activestreams.begin();
+                                     sIter != activestreams.end(); sIter++) {
+                                (*sIter)->suspendedDevIds.clear();
+                                if (isDeviceAvailable(PAL_DEVICE_IN_BLUETOOTH_A2DP))
+                                    (*sIter)->suspendedDevIds.
+                                                  push_back(PAL_DEVICE_IN_BLUETOOTH_A2DP);
+                                else if (isDeviceAvailable(PAL_DEVICE_IN_BLUETOOTH_BLE))
+                                    (*sIter)->suspendedDevIds.
+                                                  push_back(PAL_DEVICE_IN_BLUETOOTH_BLE);
+                            }
                             PAL_DBG(LOG_TAG, "a2dp resumed, switch bt sco mic to handset mic");
                             stream = static_cast<Stream *>(activestreams[0]);
                             stream->getStreamAttributes(&sAttr);
@@ -11198,10 +11199,14 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                                 (streamType == PAL_STREAM_PCM_OFFLOAD) ||
                                 (streamType == PAL_STREAM_DEEP_BUFFER) ||
                                 (streamType == PAL_STREAM_SPATIAL_AUDIO) ||
-                                (streamType == PAL_STREAM_COMPRESSED)) {
-                                (*sIter)->suspendedDevIds.clear();
-                                (*sIter)->suspendedDevIds.push_back(PAL_DEVICE_OUT_BLUETOOTH_SCO);
-                                PAL_DBG(LOG_TAG, "a2dp resumed, mark sco streams as to route them later");
+                                (streamType == PAL_STREAM_COMPRESSED) ||
+                                (streamType == PAL_STREAM_GENERIC)) {
+                                if ((*sIter)->suspendedDevIds.empty()) {
+                                    (*sIter)->suspendedDevIds.
+                                        push_back(PAL_DEVICE_OUT_BLUETOOTH_SCO);
+                                    PAL_DBG(LOG_TAG, "a2dp resumed, \
+                                        mark sco streams as to route them later");
+                                }
                             }
                         }
                     }
@@ -11338,18 +11343,11 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
             struct pal_device a2dp_dattr = {};
             pal_param_bta2dp_t* current_param_bt_a2dp = nullptr;
             pal_param_bta2dp_t* param_bt_a2dp = nullptr;
+            bool skip_switch = false;
 
             mResourceManagerMutex.unlock();
             param_bt_a2dp = (pal_param_bta2dp_t*)param_payload;
-
-            if (isDeviceAvailable(param_bt_a2dp->dev_id)) {
-                a2dp_dattr.id = param_bt_a2dp->dev_id;
-            } else {
-                PAL_ERR(LOG_TAG, "a2dp/ble device %d is unavailable, set param %d failed",
-                    param_bt_a2dp->dev_id, param_id);
-                status = -EIO;
-                goto exit_no_unlock;
-            }
+            a2dp_dattr.id = param_bt_a2dp->dev_id;
 
             a2dp_dev = Device::getInstance(&a2dp_dattr, rm);
             if (!a2dp_dev) {
@@ -11359,13 +11357,28 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
             }
 
             a2dp_dev->getDeviceParameter(param_id, (void**)&current_param_bt_a2dp);
-            if (current_param_bt_a2dp->a2dp_capture_suspended == param_bt_a2dp->a2dp_capture_suspended) {
+            /* If device is already suspended from framework, ignore suspend/resume
+             * which is sent via reconfig_cb. Honouring the param in such scenario
+             * will lead to incorrect stream state.
+             */
+            if (current_param_bt_a2dp->a2dp_capture_suspended &&
+                current_param_bt_a2dp->is_suspend_setparam &&
+                !param_bt_a2dp->is_suspend_setparam) {
+                PAL_INFO(LOG_TAG, "suspend/resume from reconfig_cb ignored");
+                goto exit_no_unlock;
+            }
+
+            if (current_param_bt_a2dp->a2dp_capture_suspended ==
+                    param_bt_a2dp->a2dp_capture_suspended) {
                 PAL_INFO(LOG_TAG, "a2dp/ble already in requested state, ignoring");
                 goto exit_no_unlock;
             }
 
+            if(!isDeviceAvailable(param_bt_a2dp->dev_id))
+                skip_switch = true;
+
             if (ResourceManager::isDummyDevEnabled) {
-                if (param_bt_a2dp->a2dp_capture_suspended == false) {
+                if (!skip_switch && param_bt_a2dp->a2dp_capture_suspended == false) {
                     struct pal_device sco_rx_dattr = {};
                     std::shared_ptr<Device> sco_rx_dev = nullptr;
                     struct pal_device out_dummy_dattr = {};
@@ -11384,6 +11397,20 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                         getActiveStream_l(activestreams, sco_rx_dev);
                         mActiveStreamMutex.unlock();
                         if (activestreams.size() > 0) {
+                            /* Mark streams over OUT_SCO, so as to give them chance
+                             * to resume over A2DP/BLE if a2dpSuspend=false is
+                             * received at later stage.
+                             */
+                            for (sIter = activestreams.begin();
+                                     sIter != activestreams.end(); sIter++) {
+                                (*sIter)->suspendedDevIds.clear();
+                                if (isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP))
+                                    (*sIter)->suspendedDevIds.
+                                                  push_back(PAL_DEVICE_OUT_BLUETOOTH_A2DP);
+                                else if (isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE))
+                                    (*sIter)->suspendedDevIds.
+                                                  push_back(PAL_DEVICE_OUT_BLUETOOTH_BLE);
+                            }
                             PAL_DBG(LOG_TAG, "a2dp resumed, switch bt sco out to out_dummy device");
                             getDeviceConfig(&out_dummy_dattr, NULL);
                             rm->forceDeviceSwitch(sco_rx_dev, &out_dummy_dattr);
@@ -11413,7 +11440,7 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                     mActiveStreamMutex.unlock();
                 }
             } else {
-                if (param_bt_a2dp->a2dp_capture_suspended == false) {
+                if (!skip_switch && param_bt_a2dp->a2dp_capture_suspended == false) {
                     /* Handle bt sco out running usecase */
                     struct pal_device sco_rx_dattr;
                     struct pal_stream_attributes sAttr;
@@ -11435,6 +11462,20 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                         sco_rx_dev = Device::getInstance(&sco_rx_dattr, rm);
                         getActiveStream_l(activestreams, sco_rx_dev);
                         if (activestreams.size() > 0) {
+                            /* Mark streams over OUT_SCO, so as to give them chance
+                             * to resume over A2DP/BLE if a2dpSuspend=false is
+                             * received at later stage.
+                             */
+                            for (sIter = activestreams.begin();
+                                     sIter != activestreams.end(); sIter++) {
+                                (*sIter)->suspendedDevIds.clear();
+                                if (isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP))
+                                    (*sIter)->suspendedDevIds.
+                                                  push_back(PAL_DEVICE_OUT_BLUETOOTH_A2DP);
+                                else if (isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE))
+                                    (*sIter)->suspendedDevIds.
+                                                  push_back(PAL_DEVICE_OUT_BLUETOOTH_BLE);
+                            }
                             stream = static_cast<Stream*>(activestreams[0]);
                             stream->getStreamAttributes(&sAttr);
                             getDeviceConfig(&speaker_dattr, &sAttr);
@@ -13078,7 +13119,10 @@ void ResourceManager::process_device_info(struct xml_userdata *data, const XML_C
             std::string snddevname(data->data_buf);
             deviceInfo[size].sndDevName = snddevname;
             updateSndName(deviceInfo[size].deviceId, snddevname);
-        } else if (!strcmp(tag_name, "speaker_protection_enabled")) {
+        } else if (!strcmp(tag_name, "silence_detection_enabled")) {
+            if (atoi(data->data_buf))
+                isSilenceDetectionEnabled = true;
+        }else if (!strcmp(tag_name, "speaker_protection_enabled")) {
             if (atoi(data->data_buf))
                 isSpeakerProtectionEnabled = true;
         } else if (!strcmp(tag_name, "handset_protection_enabled")) {

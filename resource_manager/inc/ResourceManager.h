@@ -656,8 +656,6 @@ public:
     static bool mixerClosed;
     enum card_status_t cardState;
     bool ssrStarted = false;
-    /* Variable to cache a2dp suspended state for a2dp device */
-    static bool a2dp_suspended;
     /* Variable to store whether Speaker protection is enabled or not */
     static bool isSpeakerProtectionEnabled;
     static bool isHandsetProtectionEnabled;
@@ -702,6 +700,8 @@ public:
     static bool isHapticsthroughWSA;
     /* Variable to store max volume index for voice call */
     static int max_voice_vol;
+    /* Variable to store if Silence Detection is enabled */
+    static bool isSilenceDetectionEnabled;
     /*variable to store MSPP linear gain*/
     pal_param_mspp_linear_gain_t linear_gain;
 #ifdef SOC_PERIPHERAL_PROT

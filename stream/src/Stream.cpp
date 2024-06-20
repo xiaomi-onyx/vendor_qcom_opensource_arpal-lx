@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1298,11 +1298,11 @@ int32_t Stream::disconnectStreamDevice_l(Stream* streamHandle, pal_device_id_t d
 {
     int32_t status = 0;
 
-    if (currentState == STREAM_IDLE) {
+    if (currentState == STREAM_IDLE || PAL_CARD_STATUS_DOWN(rm->cardState)) {
         for (int i = 0; i < mDevices.size(); i++) {
             if (dev_id == mDevices[i]->getSndDeviceId()) {
                 mDevices.erase(mDevices.begin() + i);
-                PAL_DBG(LOG_TAG, "stream is in IDLE state, erase device: %d", dev_id);
+                PAL_DBG(LOG_TAG, "stream is in IDLE state or SSR coming, erase device: %d", dev_id);
                 break;
             }
         }
@@ -1393,8 +1393,8 @@ int32_t Stream::connectStreamDevice_l(Stream* streamHandle, struct pal_device *d
 
     dev->setDeviceAttributes(*dattr);
 
-    if (currentState == STREAM_IDLE) {
-        PAL_DBG(LOG_TAG, "stream is in IDLE state, insert %d to mDevices", dev->getSndDeviceId());
+    if (currentState == STREAM_IDLE || PAL_CARD_STATUS_DOWN(rm->cardState)) {
+        PAL_DBG(LOG_TAG, "stream is in IDLE state or SSR coming, insert %d to mDevices", dev->getSndDeviceId());
         mDevices.push_back(dev);
         status = 0;
         goto exit;
@@ -1627,13 +1627,6 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
         return -EINVAL;
     }
 
-    if (PAL_CARD_STATUS_DOWN(rm->cardState)) {
-        PAL_ERR(LOG_TAG, "Sound card offline/standby");
-        mStreamMutex.unlock();
-        rm->unlockActiveStream();
-        return 0;
-    }
-
     streamHandle->getStreamAttributes(&strAttr);
 
     for (int i = 0; i < mDevices.size(); i++) {
@@ -1738,7 +1731,7 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
         if ((newDevices[i].id == PAL_DEVICE_NONE) &&
             ((isCurrentDeviceProxyOut) || (isCurrentDeviceDpOut) ||
              ((isCurDeviceA2dp || isCurDeviceSco) && (!rm->isDeviceReady(curBtDevId))))) {
-            newDevices[i].id = PAL_DEVICE_OUT_SPEAKER;
+            newDevices[i].id = PAL_DEVICE_OUT_DUMMY;
 
             if (rm->getDeviceConfig(&newDevices[i], mStreamAttr)) {
                 continue;
@@ -1751,9 +1744,7 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
             return 0;
         }
         devReadyStatus = rm->isDeviceReady(newDevices[i].id);
-        if ((newDevices[i].id == PAL_DEVICE_OUT_BLUETOOTH_A2DP) ||
-            (newDevices[i].id == PAL_DEVICE_OUT_BLUETOOTH_BLE) ||
-            (newDevices[i].id == PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
+        if (rm->isBtA2dpDevice(newDevices[i].id)) {
             isNewDeviceA2dp = true;
             newBtDevId = newDevices[i].id;
             isBtReady = devReadyStatus;

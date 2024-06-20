@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1720,10 +1720,7 @@ int SessionAlsaCompress::start(Stream * s)
         default:
             break;
     }
-    status = setInitialVolume();
-    if (status != 0) {
-        PAL_ERR(LOG_TAG, "setVolume failed");
-    }
+    setInitialVolume();
     //Setting the device orientation during stream open
     if (PAL_DEVICE_OUT_SPEAKER == dAttr.id) {
         PAL_DBG(LOG_TAG,"set device orientation %d", rm->mOrientation);
@@ -1858,6 +1855,7 @@ int SessionAlsaCompress::close(Stream * s)
     std::string backendname;
     std::vector<std::shared_ptr<Device>> associatedDevices;
     int32_t beDevId = 0;
+    int devCount = 0;
 
     PAL_DBG(LOG_TAG, "Enter");
 
@@ -1875,7 +1873,11 @@ int SessionAlsaCompress::close(Stream * s)
                 beDevId = dev->getSndDeviceId();
                 rm->getBackendName(beDevId, backendname);
                 PAL_DBG(LOG_TAG, "backendname %s", backendname.c_str());
-                if (dev->getDeviceCount() != 0) {
+                devCount = dev->getDeviceCount();
+                // Do not clear device metadata for A2DP device if SCO device is active
+                if ((devCount == 1) && rm->isBtA2dpDevice((pal_device_id_t) beDevId))
+                    devCount += SessionAlsaUtils::getScoDevCount();
+                if (devCount > 1) {
                     PAL_DBG(LOG_TAG, "Rx dev still active\n");
                     freeDeviceMetadata.push_back(
                         std::make_pair(backendname, 0));

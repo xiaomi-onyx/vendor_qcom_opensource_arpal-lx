@@ -1273,8 +1273,6 @@ int BtA2dp::close_audio_source()
         mDeviceMutex.unlock();
     }
     totalActiveSessionRequests = 0;
-    param_bt_a2dp.a2dp_suspended = false;
-    param_bt_a2dp.reconfig = false;
     param_bt_a2dp.latency = 0;
     a2dpState = A2DP_STATE_DISCONNECTED;
     isConfigured = false;
@@ -1349,8 +1347,6 @@ void BtA2dp::init_a2dp_source()
         PAL_DBG(LOG_TAG, "calling BT module preinit");
         bt_audio_pre_init();
     }
-    usleep(20 * 1000); //TODO: to add interval properly
-    open_a2dp_source();
 }
 
 void BtA2dp::init_a2dp_sink()
@@ -1405,12 +1401,6 @@ void BtA2dp::init_a2dp_sink()
                 dlsym(bt_lib_sink_handle, "audio_stream_open");
             audio_sink_close = (audio_sink_close_t)
                 dlsym(bt_lib_sink_handle, "audio_stream_close");
-
-#ifdef A2DP_SINK_SUPPORTED
-
-                open_a2dp_sink();
-#endif
-
 #else
             // On Linux Builds - A2DP Sink Profile is supported via different lib
             PAL_ERR(LOG_TAG, "DLOPEN failed for %s", BT_IPC_SINK_LIB);
@@ -1486,9 +1476,6 @@ int BtA2dp::close_audio_sink()
         mDeviceMutex.unlock();
     }
     totalActiveSessionRequests = 0;
-    param_bt_a2dp.a2dp_suspended = false;
-    param_bt_a2dp.a2dp_capture_suspended = false;
-    param_bt_a2dp.reconfig = false;
     param_bt_a2dp.latency = 0;
     a2dpState = A2DP_STATE_DISCONNECTED;
     isConfigured = false;
@@ -1579,11 +1566,15 @@ int BtA2dp::startPlayback()
 
     if (param_bt_a2dp.a2dp_suspended) {
         // session will be restarted after suspend completion
-        PAL_INFO(LOG_TAG, "a2dp start requested during suspend state");
+        PAL_ERR(LOG_TAG, "a2dp start requested during suspend state");
         return -ENOSYS;
     } else if (a2dpState == A2DP_STATE_DISCONNECTED) {
-        PAL_INFO(LOG_TAG, "a2dp start requested when a2dp source stream is failed to open");
-        return -ENOSYS;
+        // update device status, if still disconnected, return error.
+        if (!(rm->isDeviceAvailable(deviceAttr.id) &&
+              checkDeviceStatus() != A2DP_STATE_DISCONNECTED)) {
+            PAL_ERR(LOG_TAG, "a2dp start requested when a2dp source stream is failed to open");
+            return -ENOSYS;
+        }
     }
 
     if (a2dpState != A2DP_STATE_STARTED && !totalActiveSessionRequests) {
@@ -1600,6 +1591,9 @@ int BtA2dp::startPlayback()
             ret = audio_source_start();
         }
         if (ret != 0) {
+            // TODO: CTRL_ACK_RECONFIGURATION needs retry design
+            if (ret <= CTRL_SKT_DISCONNECTED && ret >= CTRL_ACK_FAILURE)
+                ret = -ENODEV;
             PAL_ERR(LOG_TAG, "BT controller start failed");
             return ret;
         }
@@ -1783,6 +1777,9 @@ int BtA2dp::startCapture()
 
             PAL_INFO(LOG_TAG, "BT controller start capture return = %d",ret);
             if (ret != 0 ) {
+                // TODO: CTRL_ACK_RECONFIGURATION needs retry design
+                if (ret <= CTRL_SKT_DISCONNECTED && ret >= CTRL_ACK_FAILURE)
+                    ret = -ENODEV;
                 PAL_ERR(LOG_TAG, "BT controller start capture failed");
                 return ret;
             }
@@ -1841,6 +1838,9 @@ int BtA2dp::startCapture()
 
             PAL_INFO(LOG_TAG, "BT controller start return = %d",ret);
             if (ret != 0 ) {
+                // TODO: CTRL_ACK_RECONFIGURATION needs retry design
+                if (ret <= CTRL_SKT_DISCONNECTED && ret >= CTRL_ACK_FAILURE)
+                    ret = -ENODEV;
                 PAL_ERR(LOG_TAG, "BT controller start failed");
                 return ret;
             }
@@ -1982,9 +1982,6 @@ int32_t BtA2dp::setDeviceParameter(uint32_t param_id, void *param)
                 status = close_audio_sink();
 #else
                 totalActiveSessionRequests = 0;
-                param_bt_a2dp.a2dp_suspended = false;
-                param_bt_a2dp.a2dp_capture_suspended = false;
-                param_bt_a2dp.reconfig = false;
                 param_bt_a2dp.latency = 0;
                 a2dpState = A2DP_STATE_DISCONNECTED;
 #endif
@@ -2023,10 +2020,11 @@ int32_t BtA2dp::setDeviceParameter(uint32_t param_id, void *param)
             else
                 audio_source_suspend();
         } else {
+            param_bt_a2dp.a2dp_suspended = false;
+            if (a2dpState == A2DP_STATE_DISCONNECTED)
+                goto exit;
             if (clear_source_a2dpsuspend_flag)
                 clear_source_a2dpsuspend_flag();
-
-            param_bt_a2dp.a2dp_suspended = false;
 
             if (totalActiveSessionRequests > 0) {
                 if (audio_source_start_api) {
@@ -2357,6 +2355,22 @@ BtA2dp::getInstance(struct pal_device *device, std::shared_ptr<ResourceManager> 
         }
         return objBleTx;
     }
+}
+int32_t BtA2dp::checkDeviceStatus() {
+    if (a2dpState == A2DP_STATE_DISCONNECTED) {
+        PAL_INFO(LOG_TAG, "retry to open a2dp source");
+        if (a2dpRole == SOURCE)
+            open_a2dp_source();
+        else {
+#ifdef A2DP_SINK_SUPPORTED
+            open_a2dp_sink();
+#else
+            a2dpState = A2DP_STATE_CONNECTED;
+#endif
+        }
+    }
+    PAL_DBG(LOG_TAG, "a2dpState: %d", a2dpState);
+    return a2dpState;
 }
 
 /* Scope of BtScoRX/Tx class */
