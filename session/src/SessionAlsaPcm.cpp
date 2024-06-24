@@ -4498,6 +4498,10 @@ void handleSilenceDetectionCb(uint64_t hdl __unused, uint32_t event_id, void *ev
     struct tm *timenow;
     time_t now = time(NULL);
     timenow = gmtime(&now);
+    if (!timenow) {
+        PAL_ERR(LOG_TAG, "failed to initialize timenow struct\n");
+        return;
+    }
     PAL_INFO(LOG_TAG, "Silence Detection event raised\n");
 
     switch (event_id) {
