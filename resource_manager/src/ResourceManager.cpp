@@ -1016,12 +1016,14 @@ ResourceManager::ResourceManager()
      for (int i = 0; i < max_nt_sessions; i++)
           listAllNonTunnelSessionIds.push_back(maxDeviceIdInUse + i);
 
+#ifndef LINUX_ENABLED
     // Get AGM service handle
     ret = agm_register_service_crash_callback(&agmServiceCrashHandler,
                                                (uint64_t)this);
     if (ret) {
         PAL_ERR(LOG_TAG, "AGM service not up%d", ret);
     }
+#endif
 
     auto encodeMap = std::make_shared<std::unordered_map<uint32_t, bool>>();
     auto decodeMap = std::make_shared<std::unordered_map<uint32_t, bool>>();
@@ -1110,14 +1112,10 @@ ResourceManager::~ResourceManager()
     listAllPcmExtEcTxFrontEnds.clear();
     usb_vendor_uuid_list.clear();
     devInfo.clear();
-    deviceInfo.clear();
     txEcInfo.clear();
 
     STInstancesLists.clear();
-    listAllBackEndIds.clear();
-    sndDeviceNameLUT.clear();
     devicePcmId.clear();
-    deviceLinkName.clear();
     PCMDataInstances.clear();
 
     if (admLibHdl) {
@@ -1579,6 +1577,7 @@ int ResourceManager::init_audio()
                 /* TODO: Needs to extend for new targets */
                 if (strstr(snd_card_name, "kona") ||
                     strstr(snd_card_name, "sm8150") ||
+                    strstr(snd_card_name, "sdx")||
                     strstr(snd_card_name, "lahaina") ||
                     strstr(snd_card_name, "waipio") ||
                     strstr(snd_card_name, "kalama") ||
@@ -3181,7 +3180,8 @@ bool ResourceManager::isStreamSupported(struct pal_stream_attributes *attributes
     size_t cur_sessions = 0;
     size_t max_sessions = 0;
 
-    if (!attributes || ((no_of_devices > 0) && !devices)) {
+    if (!attributes || ((no_of_devices > 0) && !devices && (attributes->type != PAL_STREAM_VOICE_CALL_MUSIC)
+                         && (attributes->type != PAL_STREAM_VOICE_CALL_RECORD))) {
         PAL_ERR(LOG_TAG, "Invalid input parameter attr %p, noOfDevices %d devices %p",
                 attributes, no_of_devices, devices);
         return result;
@@ -6914,6 +6914,10 @@ void ResourceManager::deinit()
         socPerithread.join();
     }
 #endif
+    deviceInfo.clear();
+    listAllBackEndIds.clear();
+    sndDeviceNameLUT.clear();
+    deviceLinkName.clear();
     rm = nullptr;
 }
 

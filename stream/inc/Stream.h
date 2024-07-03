@@ -98,6 +98,10 @@ typedef enum {
 
 #define BUF_SIZE_PLAYBACK 1024
 #define BUF_SIZE_CAPTURE 960
+#define AUDIO_CAPTURE_PERIOD_DURATION_MSEC 20
+#define DEEP_BUFFER_OUTPUT_PERIOD_DURATION 40
+#define PCM_OFFLOAD_OUTPUT_PERIOD_DURATION 80
+#define COMPRESS_OFFLOAD_FRAGMENT_SIZE (32 * 1024)
 #define NO_OF_BUF 4
 #define MUTE_TAG 0
 #define UNMUTE_TAG 1
@@ -185,6 +189,8 @@ protected:
     std::vector <std::shared_ptr<Device>> mPalDevices; // pal devices set from client, which may differ from mDevices
     Session* session;
     struct pal_stream_attributes* mStreamAttr;
+    bool deviceMuteStateRx = false;
+    bool deviceMuteStateTx = false;
     int mGainLevel;
     int mOrientation = 0;
     std::mutex mStreamMutex;
@@ -232,6 +238,8 @@ public:
     virtual int32_t setVolume(struct pal_volume_data *volume) = 0;
     virtual int32_t mute(bool state) = 0;
     virtual int32_t mute_l(bool state) = 0;
+    virtual int32_t getDeviceMute(pal_stream_direction_t dir, bool *state) {return 0;};
+    virtual int32_t setDeviceMute(pal_stream_direction_t dir, bool state) {return 0;};
     virtual int32_t pause() = 0;
     virtual int32_t pause_l() = 0;
     virtual int32_t resume() = 0;
@@ -275,6 +283,7 @@ public:
     int32_t getBufInfo(size_t *in_buf_size, size_t *in_buf_count,
                        size_t *out_buf_size, size_t *out_buf_count);
     int32_t getMaxMetadataSz(size_t *in_max_metadata_sz, size_t *out_max_metadata_sz);
+    int32_t getBufSize(size_t *in_buf_size, size_t *out_buf_size);
     int32_t getVolumeData(struct pal_volume_data *vData);
     void setGainLevel(int level) { mGainLevel = level; };
     int getGainLevel() { return mGainLevel; };

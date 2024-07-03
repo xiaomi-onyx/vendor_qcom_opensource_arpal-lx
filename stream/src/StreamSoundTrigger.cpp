@@ -67,6 +67,7 @@
 #include <chrono>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <cstring>
 
 #include "Session.h"
 #include "SessionAlsaPcm.h"
@@ -1734,9 +1735,16 @@ bool StreamSoundTrigger::compareRecognitionConfig(
         (current_config->num_phrases != new_config->num_phrases) ||
         (current_config->data_size != new_config->data_size) ||
         (current_config->data_offset != new_config->data_offset) ||
+#if defined(LINUX_ENABLED)
+        memcmp((char *) current_config + current_config->data_offset,
+               (char *) new_config + new_config->data_offset,
+               current_config->data_size)
+#else
         std::memcmp((char *) current_config + current_config->data_offset,
                (char *) new_config + new_config->data_offset,
-               current_config->data_size)) {
+               current_config->data_size)
+#endif
+       ) {
         return false;
     } else {
         for (i = 0; i < current_config->num_phrases; i++) {

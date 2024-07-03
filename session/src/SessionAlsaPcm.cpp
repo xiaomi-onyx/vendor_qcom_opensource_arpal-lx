@@ -212,6 +212,21 @@ int SessionAlsaPcm::open(Stream * s)
             goto exit;
 
         }
+        if (sAttr.type != PAL_STREAM_VOICE_CALL_RECORD &&
+            sAttr.type != PAL_STREAM_VOICE_CALL_MUSIC) {
+            if (sAttr.direction == PAL_AUDIO_INPUT) {
+                if (txAifBackEnds.empty() || !rxAifBackEnds.empty()) {
+                    PAL_ERR(LOG_TAG, "backend specified incorrectly for this stream\n");
+                    return -EINVAL;
+                }
+            }
+            if (sAttr.direction == PAL_AUDIO_OUTPUT) {
+                if (rxAifBackEnds.empty() || !txAifBackEnds.empty()) {
+                    PAL_ERR(LOG_TAG, "backend specified incorrectly for this stream\n");
+                    return -EINVAL;
+                }
+            }
+        }
     }
     status = rm->getVirtualAudioMixer(&mixer);
     if (status) {
@@ -277,6 +292,14 @@ int SessionAlsaPcm::open(Stream * s)
             pcmDevRxIds = rm->allocateFrontEndIds(sAttr, RX_HOSTLESS);
             pcmDevTxIds = rm->allocateFrontEndIds(sAttr, TX_HOSTLESS);
             if (!pcmDevRxIds.size() || !pcmDevTxIds.size()) {
+                if (pcmDevRxIds.size()) {
+                    PAL_ERR(LOG_TAG, "freeFrontEndIds Rx called as failed");
+                    rm->freeFrontEndIds(pcmDevRxIds, sAttr, RX_HOSTLESS);
+                }
+                if (pcmDevTxIds.size()) {
+                    PAL_ERR(LOG_TAG, "freeFrontEndIds Tx called as failed");
+                    rm->freeFrontEndIds(pcmDevTxIds, sAttr, TX_HOSTLESS);
+                }
                 PAL_ERR(LOG_TAG, "allocateFrontEndIds failed");
                 status = -EINVAL;
                 goto exit;
@@ -339,8 +362,14 @@ int SessionAlsaPcm::open(Stream * s)
                 }
             }
             else {
-                status = SessionAlsaUtils::open(s, rm, pcmDevRxIds, pcmDevTxIds,
-                        rxAifBackEnds, txAifBackEnds);
+                if (txAifBackEnds.empty() || rxAifBackEnds.empty()){
+                    PAL_ERR(LOG_TAG, "tx and rx backends are not specified correctly for this stream\n");
+                    status = -EINVAL;
+                }
+                if (0 == status) {
+                    status = SessionAlsaUtils::open(s, rm, pcmDevRxIds, pcmDevTxIds,
+                             rxAifBackEnds, txAifBackEnds);
+                }
                 if (status) {
                     PAL_ERR(LOG_TAG, "session alsa open failed with %d", status);
                     rm->freeFrontEndIds(pcmDevRxIds, sAttr, RX_HOSTLESS);
@@ -2535,11 +2564,27 @@ int SessionAlsaPcm::close(Stream * s)
                     freeDeviceMetadata.push_back(std::make_pair(backendname, 1));
                 }
             }
-            status = SessionAlsaUtils::close(s, rm, pcmDevRxIds, pcmDevTxIds,
-                    rxAifBackEnds, txAifBackEnds, freeDeviceMetadata);
-            if (status) {
-                PAL_ERR(LOG_TAG, "session alsa close failed with %d", status);
+            if (sAttr.info.opt_stream_info.loopback_type ==
+                    PAL_STREAM_LOOPBACK_CAPTURE_ONLY) {
+                status = SessionAlsaUtils::close(s, rm, pcmDevTxIds, txAifBackEnds, freeDeviceMetadata);
+                if (status) {
+                    PAL_ERR(LOG_TAG, "session alsa close failed with %d", status);
+                }
             }
+            else if (sAttr.info.opt_stream_info.loopback_type ==
+                       PAL_STREAM_LOOPBACK_PLAYBACK_ONLY) {
+                status = SessionAlsaUtils::close(s, rm, pcmDevRxIds, rxAifBackEnds, freeDeviceMetadata);
+                if (status) {
+                    PAL_ERR(LOG_TAG, "session alsa close failed with %d", status);
+                }
+            }
+            else {
+                status = SessionAlsaUtils::close(s, rm, pcmDevRxIds, pcmDevTxIds,
+                        rxAifBackEnds, txAifBackEnds, freeDeviceMetadata);
+                if (status) {
+                    PAL_ERR(LOG_TAG, "session alsa close failed with %d", status);
+                }
+           }
             if (pcmRx)
                 status = pcm_close(pcmRx);
             if (status) {
@@ -3763,10 +3808,22 @@ int SessionAlsaPcm::getParameters(Stream *s __unused, int tagId, uint32_t param_
         goto exit;
     }
 
-    status = mixer_ctl_get_array(ctl, payloadData, payloadSize);
-    if (0 != status) {
-        PAL_ERR(LOG_TAG, "Get custom config failed, status = %d", status);
-        goto exit;
+    if (payloadData && payloadSize <= MAX_PCM_PAYLOAD_SIZE) {
+        status = mixer_ctl_get_array(ctl, payloadData, payloadSize);
+        if (0 != status) {
+            PAL_ERR(LOG_TAG, "Get custom config failed, status = %d", status);
+            goto exit;
+        }
+    } else {
+        if (!payloadData) {
+            PAL_ERR(LOG_TAG, "Failed to allocate payloadData memory\n");
+            status = -ENOMEM;
+            goto exit;
+        } else {
+            PAL_ERR(LOG_TAG, "Payloadsize exceeds max permissible value");
+            status = -EINVAL;
+            goto exit;
+        }
     }
 
     ptr = (uint8_t *)payloadData + sizeof(struct apm_module_param_data_t);
