@@ -5831,14 +5831,6 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
         }
     }
 
-    /*
-     * The usecases using ST framework register the onResourcesAvailable callback.
-     * Notify the framework upon concurrency is inactive.
-     */
-    if (onResourceAvailCb && !st_stream_conc_en && !active) {
-        onResourceAvailCb(onResourceAvailCookie);
-    }
-
     /* Reset enable counts to 0 if they are negative */
     if (concurrencyEnableCount < 0)
         concurrencyEnableCount = 0;
@@ -5859,6 +5851,15 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
     }
 
     mActiveStreamMutex.unlock();
+
+    /*
+     * The usecases using ST framework register the onResourcesAvailable callback.
+     * Notify the framework upon concurrency is inactive.
+     */
+    if (onResourceAvailCb && !st_stream_conc_en && !active) {
+        onResourceAvailCb(onResourceAvailCookie);
+    }
+
     PAL_DBG(LOG_TAG, "Exit");
 }
 
