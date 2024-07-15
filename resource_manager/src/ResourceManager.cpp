@@ -10735,6 +10735,7 @@ int ResourceManager::getParameter(uint32_t param_id, void **param_payload,
                 PAL_ERR(LOG_TAG, "capture handle not found %d", captureHandle);
             }
         }
+        break;
         case PAL_PARAM_ID_HAPTICS_MODE:
         {
             PAL_VERBOSE(LOG_TAG, "get parameter for FTM mode");
