@@ -27,38 +27,8 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- *
  * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef STREAM_H_
@@ -98,6 +68,10 @@ typedef enum {
 
 #define BUF_SIZE_PLAYBACK 1024
 #define BUF_SIZE_CAPTURE 960
+#define AUDIO_CAPTURE_PERIOD_DURATION_MSEC 20
+#define DEEP_BUFFER_OUTPUT_PERIOD_DURATION 40
+#define PCM_OFFLOAD_OUTPUT_PERIOD_DURATION 80
+#define COMPRESS_OFFLOAD_FRAGMENT_SIZE (32 * 1024)
 #define NO_OF_BUF 4
 #define MUTE_TAG 0
 #define UNMUTE_TAG 1
@@ -185,6 +159,8 @@ protected:
     std::vector <std::shared_ptr<Device>> mPalDevices; // pal devices set from client, which may differ from mDevices
     Session* session;
     struct pal_stream_attributes* mStreamAttr;
+    bool deviceMuteStateRx = false;
+    bool deviceMuteStateTx = false;
     int mGainLevel;
     int mOrientation = 0;
     std::mutex mStreamMutex;
@@ -232,6 +208,8 @@ public:
     virtual int32_t setVolume(struct pal_volume_data *volume) = 0;
     virtual int32_t mute(bool state) = 0;
     virtual int32_t mute_l(bool state) = 0;
+    virtual int32_t getDeviceMute(pal_stream_direction_t dir, bool *state) {return 0;};
+    virtual int32_t setDeviceMute(pal_stream_direction_t dir, bool state) {return 0;};
     virtual int32_t pause() = 0;
     virtual int32_t pause_l() = 0;
     virtual int32_t resume() = 0;
@@ -254,6 +232,9 @@ public:
                                    struct pal_mmap_buffer *info __unused) {return -EINVAL;}
     virtual int32_t GetMmapPosition(struct pal_mmap_position *position __unused) {return -EINVAL;}
     virtual int32_t getTagsWithModuleInfo(size_t *size __unused, uint8_t *payload __unused) {return -EINVAL;};
+    virtual uint32_t GetNumEvents() { return 0; }
+    virtual uint32_t GetOutputToken() { return 0; }
+    virtual uint32_t GetPayloadSize() { return 0; }
     virtual bool ConfigSupportLPI() {return true;}; //Only LPI streams can update their vote to NLPI
     int32_t getStreamAttributes(struct pal_stream_attributes *sattr);
     int32_t getModifiers(struct modifier_kv *modifiers,uint32_t *noOfModifiers);
@@ -275,6 +256,7 @@ public:
     int32_t getBufInfo(size_t *in_buf_size, size_t *in_buf_count,
                        size_t *out_buf_size, size_t *out_buf_count);
     int32_t getMaxMetadataSz(size_t *in_max_metadata_sz, size_t *out_max_metadata_sz);
+    int32_t getBufSize(size_t *in_buf_size, size_t *out_buf_size);
     int32_t getVolumeData(struct pal_volume_data *vData);
     void setGainLevel(int level) { mGainLevel = level; };
     int getGainLevel() { return mGainLevel; };
@@ -319,6 +301,7 @@ public:
     virtual int32_t HandleConcurrentStream(bool active) { return 0; }
     virtual int32_t DisconnectDevice(pal_device_id_t device_id) { return 0; }
     virtual int32_t ConnectDevice(pal_device_id_t device_id) { return 0; }
+    virtual uint32_t getCallbackEventId() { return 0; }
     static void handleSoftPauseCallBack(uint64_t hdl, uint32_t event_id, void *data,
                                                            uint32_t event_size);
     static void handleStreamException(struct pal_stream_attributes *attributes,

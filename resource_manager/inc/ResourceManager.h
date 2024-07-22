@@ -41,6 +41,11 @@
 #include <thread>
 #include <mutex>
 #include <string>
+#ifdef FEATURE_IPQ_OPENWRT
+#include "audio_route.h"
+#else
+#include "audio_route/audio_route.h"
+#endif
 #include <tinyalsa/asoundlib.h>
 #include <array>
 #include <map>
@@ -53,7 +58,6 @@
 #include <vui_dmgr_audio_intf.h>
 #include <audio_feature_stats_intf.h>
 #include <amdb_api.h>
-#include "audio_route/audio_route.h"
 #include "PalCommon.h"
 #include "PalDefs.h"
 #include "ChargerListener.h"
@@ -424,6 +428,7 @@ class StreamPCM;
 class StreamCompress;
 class StreamSoundTrigger;
 class StreamACD;
+class StreamASR;
 class StreamInCall;
 class StreamNonTunnel;
 class SoundTriggerEngine;
@@ -529,6 +534,7 @@ protected:
     std::list <StreamCompress*> active_streams_comp;
     std::list <StreamSoundTrigger*> active_streams_st;
     std::list <StreamACD*> active_streams_acd;
+    std::list <StreamASR*> active_streams_asr;
     std::list <StreamUltraSound*> active_streams_ultrasound;
     std::list <StreamSensorPCMData*> active_streams_sensor_pcm_data;
     std::list <StreamContextProxy*> active_streams_context_proxy;
@@ -546,6 +552,7 @@ protected:
     bool use_lpi_;
     bool current_concurrent_state_;
     bool is_ICL_config_;
+    bool force_nlpi_ = false;
     pal_speaker_rotation_type rotation_type_;
     bool isDeviceSwitch = false;
     static std::mutex mResourceManagerMutex;
@@ -614,6 +621,8 @@ protected:
     static int concurrencyDisableCount;
     static int ACDConcurrencyEnableCount;
     static int ACDConcurrencyDisableCount;
+    static int ASRConcurrencyEnableCount;
+    static int ASRConcurrencyDisableCount;
     static int SNSPCMDataConcurrencyEnableCount;
     static int SNSPCMDataConcurrencyDisableCount;
     static defer_switch_state_t deferredSwitchState;
@@ -632,7 +641,7 @@ protected:
     static std::mutex vui_switch_mutex_;
     static bool vui_switch_thread_exit_;
     static int deferred_switch_cnt_;
-    static void voiceUIDeferredSwitchLoop(ResourceManager* rm);
+    static void voiceUIDeferredSwitchLoop(std::shared_ptr<ResourceManager> rm);
     std::shared_ptr<CaptureProfile> SoundTriggerCaptureProfile;
     std::shared_ptr<CaptureProfile> TXMacroCaptureProfile;
     ResourceManager();
@@ -656,6 +665,7 @@ public:
     static bool mixerClosed;
     enum card_status_t cardState;
     bool ssrStarted = false;
+    static bool isQmpEnabled;
     /* Variable to store whether Speaker protection is enabled or not */
     static bool isSpeakerProtectionEnabled;
     static bool isHandsetProtectionEnabled;
@@ -876,6 +886,10 @@ public:
     void getBackEndNames( const std::vector<std::shared_ptr<Device>> &deviceList,
                           std::vector<std::pair<int32_t, std::string>> &rxBackEndNames,
                           std::vector<std::pair<int32_t, std::string>> &txBackEndNames) const;
+    void handleA2dpBleConcurrency(std::shared_ptr<Device> *inDev,
+            struct pal_device *inDevAttr, struct pal_device &dummyDevAttr,
+            std::vector <std::tuple<Stream *, uint32_t>> &streamDevDisconnect,
+            std::vector <std::tuple<Stream *, struct pal_device *>> &streamDevConnect);
     bool updateDeviceConfig(std::shared_ptr<Device> *inDev,
              struct pal_device *inDevAttr, const pal_stream_attributes* inStrAttr);
     int findActiveStreamsNotInDisconnectList(
@@ -890,12 +904,12 @@ public:
                               std::vector <Stream *> prevActiveStreams);
     const std::string getPALDeviceName(const pal_device_id_t id) const;
     bool isNonALSACodec(const struct pal_device *device) const;
-    bool isNLPISwitchSupported(pal_stream_type_t type);
-    bool IsLPISupported(pal_stream_type_t type);
-    bool IsLowLatencyBargeinSupported(pal_stream_type_t type);
-    bool IsAudioCaptureConcurrencySupported(pal_stream_type_t type);
-    bool IsVoiceCallConcurrencySupported(pal_stream_type_t type);
-    bool IsVoipConcurrencySupported(pal_stream_type_t type);
+    bool isNLPISwitchSupported();
+    bool IsLPISupported();
+    bool IsLowLatencyBargeinSupported();
+    bool IsAudioCaptureConcurrencySupported();
+    bool IsVoiceCallConcurrencySupported();
+    bool IsVoipConcurrencySupported();
     bool IsTransitToNonLPIOnChargingSupported();
     bool IsDedicatedBEForUPDEnabled();
     bool IsDutyCycleForUPDEnabled();
@@ -907,12 +921,15 @@ public:
     bool GetChargingState() const { return charging_state_; }
     bool getChargerOnlineState(void) const { return is_charger_online_; }
     bool getConcurrentBoostState(void) const { return is_concurrent_boost_state_; }
-    bool getLPIUsage() const { return use_lpi_; }
+    bool getLPIUsage() const { return use_lpi_ && !force_nlpi_; }
     bool getInputCurrentLimitorConfigStatus(void) const { return is_ICL_config_; }
     bool CheckForForcedTransitToNonLPI();
+    void setForceNLPI(bool enable) { force_nlpi_ = enable; }
     void GetVoiceUIProperties(struct pal_st_properties *qstp);
     int HandleDetectionStreamAction(pal_stream_type_t type, int32_t action, void *data);
     void HandleStreamPauseResume(pal_stream_type_t st_type, bool active);
+    std::shared_ptr<CaptureProfile> GetASRCaptureProfileByPriority(
+        StreamASR *s, std::shared_ptr<CaptureProfile> cap_prof_priority, std::string backend);
     std::shared_ptr<CaptureProfile> GetACDCaptureProfileByPriority(
         StreamACD *s, std::shared_ptr<CaptureProfile> cap_prof_priority, std::string backend);
     std::shared_ptr<CaptureProfile> GetSVACaptureProfileByPriority(
@@ -942,6 +959,7 @@ public:
     bool isTxConcurrencyActive() { return (TxconcurrencyEnableCount > 0); }
     void handleDeferredSwitch();
     void handleConcurrentStreamSwitch(std::vector<pal_stream_type_t>& st_streams);
+    void forceSwitchSoundTriggerStreams(bool active);
     std::shared_ptr<Device> getActiveEchoReferenceRxDevices(Stream *tx_str);
     std::shared_ptr<Device> getActiveEchoReferenceRxDevices_l(Stream *tx_str);
     std::vector<Stream*> getConcurrentTxStream(

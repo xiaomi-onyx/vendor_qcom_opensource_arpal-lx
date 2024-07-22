@@ -1190,6 +1190,7 @@ BtA2dp::BtA2dp(struct pal_device *device, std::shared_ptr<ResourceManager> Rm)
             isA2dpOffloadSupported);
     param_bt_a2dp.reconfig_supported = isA2dpOffloadSupported;
     param_bt_a2dp.latency = 0;
+    codecLatency = 0;
     a2dpLatencyMode = AUDIO_LATENCY_MODE_FREE;
 
     if (isA2dpOffloadSupported) {
@@ -1701,6 +1702,7 @@ int BtA2dp::stopPlayback()
         a2dpLatencyMode = AUDIO_LATENCY_MODE_FREE;
         codecInfo = NULL;
         param_bt_a2dp.latency = 0;
+        codecLatency = 0;
 
         /* Reset isTwsMonoModeOn and isLC3MonoModeOn during stop */
         if (!param_bt_a2dp.a2dp_suspended) {
@@ -1950,6 +1952,7 @@ int32_t BtA2dp::setDeviceParameter(uint32_t param_id, void *param)
 {
     int32_t status = 0;
     pal_param_bta2dp_t* param_a2dp = (pal_param_bta2dp_t *)param;
+    bool skip_switch = false;
 
     if (isA2dpOffloadSupported == false) {
        PAL_VERBOSE(LOG_TAG, "no supported encoders identified,ignoring a2dp setparam");
@@ -2037,10 +2040,16 @@ int32_t BtA2dp::setDeviceParameter(uint32_t param_id, void *param)
                     goto exit;
                 }
             }
-            if (ResourceManager::isDummyDevEnabled) {
-                status = rm->a2dpResumeFromDummy(param_a2dp->dev_id);
-            } else {
-                status = rm->a2dpResume(param_a2dp->dev_id);
+
+            if (param_a2dp->is_suspend_setparam && param_a2dp->is_in_call)
+                skip_switch = true;
+
+            if (!skip_switch) {
+                if (ResourceManager::isDummyDevEnabled) {
+                    status = rm->a2dpResumeFromDummy(param_a2dp->dev_id);
+                } else {
+                    status = rm->a2dpResume(param_a2dp->dev_id);
+                }
             }
         }
         break;
@@ -2117,10 +2126,12 @@ int32_t BtA2dp::setDeviceParameter(uint32_t param_id, void *param)
             else
                 audio_sink_suspend();
         } else {
+            param_bt_a2dp.a2dp_capture_suspended = false;
+            if (a2dpState == A2DP_STATE_DISCONNECTED)
+                goto exit;
+
             if (clear_source_a2dpsuspend_flag)
                 clear_source_a2dpsuspend_flag();
-
-            param_bt_a2dp.a2dp_capture_suspended = false;
 
             if (totalActiveSessionRequests > 0) {
                 if (audio_sink_start_api) {
@@ -2134,10 +2145,16 @@ int32_t BtA2dp::setDeviceParameter(uint32_t param_id, void *param)
                     goto exit;
                 }
             }
-            if (ResourceManager::isDummyDevEnabled) {
-                rm->a2dpCaptureResumeFromDummy(param_a2dp->dev_id);
-            } else {
-                rm->a2dpCaptureResume(param_a2dp->dev_id);
+
+            if (param_a2dp->is_suspend_setparam && param_a2dp->is_in_call)
+                skip_switch = true;
+
+            if (!skip_switch) {
+                if (ResourceManager::isDummyDevEnabled) {
+                    rm->a2dpCaptureResumeFromDummy(param_a2dp->dev_id);
+                } else {
+                    rm->a2dpCaptureResume(param_a2dp->dev_id);
+                }
             }
         }
         break;

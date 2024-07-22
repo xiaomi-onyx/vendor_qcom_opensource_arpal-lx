@@ -1123,12 +1123,28 @@ int SessionAlsaUtils::getTimestamp(struct mixer *mixer, const std::vector<int> &
          PAL_ERR(LOG_TAG, "Set failed status = %d", status);
          goto exit;
     }
-    memset(payload->data(), 0, payloadSize);
-    status = mixer_ctl_get_array(ctl, payload->data(), payloadSize);
-    if (0 != status) {
-         PAL_ERR(LOG_TAG, "Get failed status = %d", status);
-         goto exit;
+
+    if (payload && payloadSize <= MAX_UTIL_PAYLOAD_SIZE) {
+        memset(payload->data(), 0, payloadSize);
+        status = mixer_ctl_get_array(ctl, payload->data(), payloadSize);
+        if (0 != status) {
+            PAL_ERR(LOG_TAG, "Get failed status = %d", status);
+            payload.reset();
+            goto exit;
+        }
+    } else {
+        if (!payload) {
+            PAL_ERR(LOG_TAG, "Failed to allocate payload memory\n");
+            status = -ENOMEM;
+            goto exit;
+        } else {
+            PAL_ERR(LOG_TAG, "Payloadsize exceeds max permissible value");
+            payload.reset();
+            status = -EINVAL;
+            goto exit;
+        }
     }
+
     spr_session_time = (struct param_id_spr_session_time_t *)
                      (payload->data() + sizeof(struct apm_module_param_data_t));
     stime->session_time.value_lsw = spr_session_time->session_time.value_lsw;
@@ -2389,7 +2405,8 @@ int SessionAlsaUtils::connectSessionDevice(Session* sess, Stream* streamHandle, 
             }
         }
         if (sAttr.direction == PAL_AUDIO_INPUT) {
-            if (strstr(dAttr.custom_config.custom_key , "unprocessed-hdr-mic")) {
+            if (strstr(dAttr.custom_config.custom_key , "unprocessed-hdr-mic") &&
+                (dAttr.id == PAL_DEVICE_IN_HANDSET_MIC || dAttr.id == PAL_DEVICE_IN_SPEAKER_MIC)) {
                 status = sess->setConfig(streamHandle, MODULE,  ORIENTATION_TAG);
                 if (0 != status) {
                     PAL_ERR(LOG_TAG, "setting HDR record orientation config failed with status %d", status);

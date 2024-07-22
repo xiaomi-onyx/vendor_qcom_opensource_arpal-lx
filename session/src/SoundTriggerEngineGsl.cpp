@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -38,7 +38,7 @@
 #include "SoundTriggerEngineGsl.h"
 
 #include <cutils/trace.h>
-
+#include <cstring>
 #include "Session.h"
 #include "Stream.h"
 #include "StreamSoundTrigger.h"
@@ -61,7 +61,7 @@ ST_DBG_DECLARE(static int dsp_output_cnt = 0);
 std::map<st_module_type_t,std::vector<std::shared_ptr<SoundTriggerEngineGsl>>>
                  SoundTriggerEngineGsl::eng_;
 std::map<Stream*, std::shared_ptr<SoundTriggerEngineGsl>>
-                 SoundTriggerEngineGsl::str_eng_map_;
+                SoundTriggerEngineGsl::str_eng_map_;
 std::mutex SoundTriggerEngineGsl::eng_create_mutex_;
 int32_t SoundTriggerEngineGsl::engine_count_ = 0;
 std::condition_variable cvEOS;
@@ -172,7 +172,12 @@ int32_t SoundTriggerEngineGsl::StartBuffering(Stream *s) {
     sleep_ms = (input_buf_size * input_buf_num) *
         BITS_PER_BYTE * MS_PER_SEC / (sample_rate_ * bit_width_ * channels_);
 
+#if defined(LINUX_ENABLED)
+    memset(&buf, 0, sizeof(struct pal_buffer));
+#else
     std::memset(&buf, 0, sizeof(struct pal_buffer));
+#endif
+
     buf.size = input_buf_size * input_buf_num;
     buf.buffer = (uint8_t *)calloc(1, buf.size);
     if (!buf.buffer) {
@@ -1567,7 +1572,8 @@ void SoundTriggerEngineGsl::HandleSessionCallBack(uint64_t hdl, uint32_t event_i
 
     // Possible that AGM_EVENT_EOS_RENDERED could be sent during spf stop.
     // Check and handle only required detection event.
-    if (event_id != EVENT_ID_DETECTION_ENGINE_GENERIC_INFO) {
+    if (event_id != EVENT_ID_DETECTION_ENGINE_GENERIC_INFO &&
+        event_id != EVENT_ID_MMA_DETECTION_EVENT) {
         if (event_id == EVENT_ID_SH_MEM_PUSH_MODE_EOS_MARKER) {
             PAL_DBG(LOG_TAG,
             "Received event for EVENT_ID_SH_MEM_PUSH_MODE_EOS_MARKER");
@@ -1874,7 +1880,7 @@ int32_t SoundTriggerEngineGsl::UpdateSessionPayload(Stream *s, st_param_id_type_
         return status;
     }
 
-    status = builder_->payloadSVAConfig(&payload, &payload_size,
+    status = builder_->payloadConfig(&payload, &payload_size,
         (uint8_t *)intf_param.data, intf_param.size, detection_miid, param_id);
     if (status || !payload) {
         PAL_ERR(LOG_TAG, "Failed to construct SVA payload, status = %d",

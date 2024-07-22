@@ -27,7 +27,6 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- *
  * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -40,6 +39,7 @@
 #include "StreamCompress.h"
 #include "StreamSoundTrigger.h"
 #include "StreamACD.h"
+#include "StreamASR.h"
 #include "StreamContextProxy.h"
 #include "StreamUltraSound.h"
 #include "StreamSensorPCMData.h"
@@ -110,7 +110,8 @@ Stream* Stream::create(struct pal_stream_attributes *sAttr, struct pal_device *d
         goto stream_create;
     }
 
-    if (sAttr->type == PAL_STREAM_VOICE_CALL_MUSIC)
+    if ((sAttr->type == PAL_STREAM_VOICE_CALL_MUSIC) ||
+        (sAttr->type == PAL_STREAM_VOICE_CALL_RECORD))
         goto stream_create;
 
     if (sAttr->type == PAL_STREAM_SENSOR_PCM_DATA) {
@@ -240,6 +241,14 @@ stream_create:
                     break;
                 case PAL_STREAM_ACD:
                     stream = new StreamACD(sAttr,
+                                           palDevsAttr,
+                                           noOfDevices,
+                                           modifiers,
+                                           noOfModifiers,
+                                           rm);
+                    break;
+                case PAL_STREAM_ASR:
+                    stream = new StreamASR(sAttr,
                                            palDevsAttr,
                                            noOfDevices,
                                            modifiers,
@@ -821,6 +830,79 @@ int32_t Stream::getBufInfo(size_t *in_buf_size, size_t *in_buf_count,
         PAL_DBG(LOG_TAG, "Out Buffer size %zu and Out Buffer count %zu",
                 *out_buf_size, *out_buf_count);
 
+    return status;
+}
+
+int32_t Stream::getBufSize(size_t *in_buf_size, size_t *out_buf_size)
+{
+    int32_t status = 0;
+    struct pal_stream_attributes *sattr = NULL;
+    sattr = (struct pal_stream_attributes *)calloc(1, sizeof(struct pal_stream_attributes));
+    if (!sattr) {
+        status = -ENOMEM;
+        PAL_ERR(LOG_TAG, "stream attribute malloc failed %s, status %d", strerror(errno), status);
+        goto exit;
+    }
+
+    if (!in_buf_size)
+        PAL_DBG(LOG_TAG, "Invalid In Buffer size");
+
+    if (!out_buf_size)
+        PAL_DBG(LOG_TAG, "Invalid Out Buffer size");
+
+    status = getStreamAttributes(sattr);
+    if (sattr->direction == PAL_AUDIO_OUTPUT) {
+        if(!out_buf_size) {
+            status = -EINVAL;
+            PAL_ERR(LOG_TAG, "Invalid output buffer size status %d", status);
+            goto exit;
+        }
+        switch (sattr->type) {
+            case PAL_STREAM_DEEP_BUFFER:
+            case PAL_STREAM_PCM_OFFLOAD:
+                *out_buf_size = ((sattr->out_media_config.bit_width) / 8) *
+                                (sattr->out_media_config.sample_rate) *
+                                (sattr->out_media_config.ch_info.channels);
+
+                *out_buf_size = *out_buf_size / 1000;
+                *out_buf_size = *out_buf_size * DEEP_BUFFER_OUTPUT_PERIOD_DURATION;
+                break;
+            case PAL_STREAM_COMPRESSED:
+                *out_buf_size = COMPRESS_OFFLOAD_FRAGMENT_SIZE;
+                break;
+            default:
+                PAL_ERR(LOG_TAG, "unsupported stream type 0x%x", sattr->type);
+                break;
+        }
+        PAL_DBG(LOG_TAG, "out_buf_size %zu", *out_buf_size);
+    } else if (sattr->direction == PAL_AUDIO_INPUT) {
+        if(!in_buf_size) {
+            status = -EINVAL;
+            PAL_ERR(LOG_TAG, "Invalid input buffer size status %d", status);
+            goto exit;
+        }
+
+        switch (sattr->type) {
+            case PAL_STREAM_DEEP_BUFFER:
+            case PAL_STREAM_PCM_OFFLOAD:
+                *in_buf_size = ((sattr->out_media_config.bit_width) / 8) *
+                                (sattr->out_media_config.sample_rate) *
+                                (sattr->out_media_config.ch_info.channels);
+
+                *in_buf_size = *in_buf_size / 1000;
+                *in_buf_size = *in_buf_size * AUDIO_CAPTURE_PERIOD_DURATION_MSEC;
+                break;
+            case PAL_STREAM_COMPRESSED:
+                *in_buf_size = COMPRESS_OFFLOAD_FRAGMENT_SIZE;
+                break;
+            default:
+                PAL_ERR(LOG_TAG, "unsupported stream type 0x%x", sattr->type);
+                break;
+        }
+        PAL_DBG(LOG_TAG, "in_buf_size %zu", *in_buf_size);
+    }
+
+exit:
     return status;
 }
 
@@ -1727,6 +1809,9 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
         std::shared_ptr<Device> dev = nullptr;
         bool devReadyStatus = false;
         pal_param_bta2dp_t* param_bt_a2dp = nullptr;
+        std::vector<Stream*> bleRecordStream;
+        struct pal_device inBleDattr = {};
+
         /*
          * When A2DP, Out Proxy and DP device is disconnected the
          * music playback is paused and the policy manager sends routing=0
@@ -1757,6 +1842,17 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
             mStreamMutex.unlock();
             rm->unlockActiveStream();
             return 0;
+        }
+
+        if (newDevices[i].id == PAL_DEVICE_OUT_BLUETOOTH_A2DP) {
+            inBleDattr.id = PAL_DEVICE_IN_BLUETOOTH_BLE;
+            dev = Device::getInstance(&inBleDattr, rm);
+            if (dev) {
+                rm->getActiveStream_l(bleRecordStream, dev);
+                if (bleRecordStream.size() > 0)
+                    newDevices[i].id = PAL_DEVICE_OUT_DUMMY;
+                dev = nullptr;
+            }
         }
         devReadyStatus = rm->isDeviceReady(newDevices[i].id);
         if (rm->isBtA2dpDevice(newDevices[i].id)) {
@@ -2145,6 +2241,7 @@ std::shared_ptr<Device> Stream::GetPalDevice(Stream *streamHandle, pal_device_id
     std::shared_ptr<Device> device = nullptr;
     StreamSoundTrigger *st_st = nullptr;
     StreamACD *st_acd = nullptr;
+    StreamASR *st_asr = nullptr;
     StreamSensorPCMData *st_sns_pcm_data = nullptr;
     struct pal_device dev;
 
@@ -2166,6 +2263,9 @@ std::shared_ptr<Device> Stream::GetPalDevice(Stream *streamHandle, pal_device_id
     } else if (mStreamAttr->type == PAL_STREAM_ACD) {
         st_acd = dynamic_cast<StreamACD*>(streamHandle);
         cap_prof = st_acd->GetCurrentCaptureProfile();
+    } else if (mStreamAttr->type == PAL_STREAM_ASR) {
+        st_asr = dynamic_cast<StreamASR*>(streamHandle);
+        cap_prof = st_asr->GetCurrentCaptureProfile();
     } else {
         st_sns_pcm_data = dynamic_cast<StreamSensorPCMData*>(streamHandle);
         cap_prof = st_sns_pcm_data->GetCurrentCaptureProfile();

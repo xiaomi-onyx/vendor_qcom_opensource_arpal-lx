@@ -1113,8 +1113,56 @@ int32_t  StreamPCM::getCallBack(pal_stream_callback * /*cb*/)
     return 0;
 }
 
-int32_t StreamPCM::getParameters(uint32_t /*param_id*/, void ** /*payload*/)
+int32_t StreamPCM::setDeviceMute(pal_stream_direction_t dir, bool state)
 {
+    int32_t status = 0;
+    PAL_DBG(LOG_TAG, "Enter. ");
+
+    if (dir == PAL_AUDIO_OUTPUT)
+        deviceMuteStateRx = state;
+    else
+        deviceMuteStateTx = state;
+
+    return status;
+}
+
+int32_t StreamPCM::getDeviceMute(pal_stream_direction_t dir, bool *state)
+{
+    int32_t status = 0;
+    PAL_DBG(LOG_TAG, "Enter. ");
+
+    if(!state)
+    {
+        PAL_ERR(LOG_TAG, "NULL volume pointer sent");
+        status = -EINVAL;
+        return status;
+    }
+    if (dir == PAL_AUDIO_OUTPUT)
+        *state = deviceMuteStateRx;
+    else
+        *state = deviceMuteStateTx;
+
+    return status;
+}
+
+int32_t StreamPCM::getParameters(uint32_t param_id, void ** payload)
+{
+    pal_param_payload *param_payload = nullptr;
+    PAL_DBG(LOG_TAG, "Enter.");
+
+    switch(param_id) {
+        case PAL_PARAM_ID_DEVICE_MUTE:
+        {
+            param_payload = (pal_param_payload *)(*payload);
+            pal_device_mute_t *deviceMutePayload = (pal_device_mute_t *) (param_payload + sizeof(pal_param_payload));
+            getDeviceMute(deviceMutePayload->dir, &(deviceMutePayload->mute));
+            break;
+        }
+        default:
+            PAL_INFO(LOG_TAG, "Not supported for param id %u", param_id);
+            break;
+    }
+
     return 0;
 }
 
@@ -1124,6 +1172,7 @@ int32_t  StreamPCM::setParameters(uint32_t param_id, void *payload)
     int32_t setConfigStatus = 0;
     pal_param_payload *param_payload = NULL;
     effect_pal_payload_t *effectPalPayload = nullptr;
+    pal_device_mute_t *deviceMutePayload = nullptr;
 
     PAL_DBG(LOG_TAG, "Enter, set parameter %u, session handle - %p", param_id, session);
 
@@ -1163,7 +1212,12 @@ int32_t  StreamPCM::setParameters(uint32_t param_id, void *payload)
             if (NULL != session) {
                 /* To avoid pop while switching channels, it is required to mute
                    the playback first and then swap the channel and unmute */
-                setConfigStatus = session->setConfig(this, MODULE, DEVICEPP_MUTE);
+                if (mStreamAttr->type == PAL_STREAM_LOW_LATENCY ||
+                    mStreamAttr->type == PAL_STREAM_ULTRA_LOW_LATENCY) {
+                    setConfigStatus = session->setConfig(this, MODULE, MUTE_TAG);
+                } else {
+                    setConfigStatus = session->setConfig(this, MODULE, DEVICEPP_MUTE);
+                }
                 if (setConfigStatus) {
                     PAL_INFO(LOG_TAG, "DevicePP Mute failed");
                 }
@@ -1176,7 +1230,12 @@ int32_t  StreamPCM::setParameters(uint32_t param_id, void *payload)
                 mStreamMutex.unlock();
                 usleep(MUTE_RAMP_PERIOD); // Wait for channel swap to take affect
                 mStreamMutex.lock();
-                setConfigStatus = session->setConfig(this, MODULE, DEVICEPP_UNMUTE);
+                if (mStreamAttr->type == PAL_STREAM_LOW_LATENCY ||
+                    mStreamAttr->type == PAL_STREAM_ULTRA_LOW_LATENCY) {
+                    setConfigStatus = session->setConfig(this, MODULE, UNMUTE_TAG);
+                } else {
+                    setConfigStatus = session->setConfig(this, MODULE, DEVICEPP_UNMUTE);
+                }
                 if (setConfigStatus) {
                     PAL_INFO(LOG_TAG, "DevicePP Unmute failed");
                 }
@@ -1211,11 +1270,16 @@ int32_t  StreamPCM::setParameters(uint32_t param_id, void *payload)
         }
         case PAL_PARAM_ID_DEVICE_MUTE:
         {
+            param_payload = (pal_param_payload *)payload;
+            deviceMutePayload = (pal_device_mute_t *)(param_payload->payload);
             status = session->setParameters(this, DEVICE_MUTE,
                                             param_id, payload);
-            if (status)
-               PAL_ERR(LOG_TAG, "setParam for slow talk failed with %d",
+            if (status) {
+               PAL_ERR(LOG_TAG, "setParam for device mute failed with %d",
                        status);
+            } else {
+               setDeviceMute(deviceMutePayload->dir, deviceMutePayload->mute);
+            }
             break;
         }
         default:

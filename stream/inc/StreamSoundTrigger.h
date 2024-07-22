@@ -42,6 +42,8 @@
 #include "PalRingBuffer.h"
 #include "SoundTriggerEngine.h"
 #include "VoiceUIPlatformInfo.h"
+#include "detection_cmn_api.h"
+#include "mma_api.h"
 
 enum {
     ENGINE_IDLE  = 0x0,
@@ -131,6 +133,8 @@ public:
     int32_t setVolume(struct pal_volume_data * volume __unused) { return 0; }
     int32_t mute(bool state __unused) override { return 0; }
     int32_t mute_l(bool state __unused) override { return 0; }
+    int32_t getDeviceMute(pal_stream_direction_t dir __unused, bool *state __unused) override {return 0;}
+    int32_t setDeviceMute(pal_stream_direction_t dir __unused, bool state __unused) override {return 0;}
     int32_t pause() override { return 0; }
     int32_t pause_l() override { return 0; }
     int32_t resume() override { return 0; }
@@ -171,6 +175,7 @@ public:
     int32_t setECRef(std::shared_ptr<Device> dev, bool is_enable) override;
     int32_t setECRef_l(std::shared_ptr<Device> dev, bool is_enable) override;
     bool ConfigSupportLPI() override;
+    uint32_t getCallbackEventId() override;
     void TransitTo(int32_t state_id);
 
     friend class PalRingBufferReader;
