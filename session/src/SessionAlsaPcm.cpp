@@ -3878,22 +3878,16 @@ int SessionAlsaPcm::getParameters(Stream *s, int tagId, uint32_t param_id, void 
         goto exit;
     }
 
-    if (payloadData && payloadSize <= MAX_PCM_PAYLOAD_SIZE) {
+    if (payloadData) {
         status = mixer_ctl_get_array(ctl, payloadData, payloadSize);
         if (0 != status) {
             PAL_ERR(LOG_TAG, "Get custom config failed, status = %d", status);
             goto exit;
         }
     } else {
-        if (!payloadData) {
-            PAL_ERR(LOG_TAG, "Failed to allocate payloadData memory\n");
-            status = -ENOMEM;
-            goto exit;
-        } else {
-            PAL_ERR(LOG_TAG, "Payloadsize exceeds max permissible value");
-            status = -EINVAL;
-            goto exit;
-        }
+        PAL_ERR(LOG_TAG, "Failed to allocate payloadData memory\n");
+        status = -ENOMEM;
+        goto exit;
     }
 
     ptr = (uint8_t *)payloadData + sizeof(struct apm_module_param_data_t);
