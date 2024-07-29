@@ -1477,8 +1477,10 @@ void ResourceManager::ssrHandlingLoop(std::shared_ptr<ResourceManager> rm)
                     mActiveStreamMutex.lock();
                 }
 
+                mResourceManagerMutex.lock();
                 SoundTriggerCaptureProfile = GetCaptureProfileByPriority(nullptr, "va_macro");
                 TXMacroCaptureProfile = GetCaptureProfileByPriority(nullptr, "tx_macro");
+                mResourceManagerMutex.unlock();
                 for (auto str: rm->mActiveStreams) {
                     ret = increaseStreamUserCounter(str);
                     if (0 != ret) {
@@ -5000,6 +5002,7 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
         PAL_ERR(LOG_TAG, "Error:%d Invalid stream type", -EINVAL);
         return false;
     }
+    mResourceManagerMutex.lock();
     // backend config update
     if (is_active) {
         if (sAttr.type == PAL_STREAM_VOICE_UI)
@@ -5013,6 +5016,7 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
 
         if (!cap_prof) {
             PAL_ERR(LOG_TAG, "Failed to get capture profile");
+            mResourceManagerMutex.unlock();
             return false;
         }
 
@@ -5050,6 +5054,7 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
                 backend_update = true;
         }
     }
+    mResourceManagerMutex.unlock();
 
     return backend_update;
 }
@@ -5574,6 +5579,7 @@ void ResourceManager::handleConcurrentStreamSwitch(std::vector<pal_stream_type_t
 
     // update common capture profile after use_lpi_ updated for all streams
     if (st_streams.size()) {
+        mResourceManagerMutex.lock();
         /* Updating SoundTriggerCaptureProfile for streams use VA Macro capture profiles */
         SoundTriggerCaptureProfile = nullptr;
         cap_prof_priority = GetCaptureProfileByPriority(nullptr, "va_macro");
@@ -5595,6 +5601,7 @@ void ResourceManager::handleConcurrentStreamSwitch(std::vector<pal_stream_type_t
                 CAPTURE_PROFILE_PRIORITY_HIGH) {
             TXMacroCaptureProfile = cap_prof_priority;
         }
+        mResourceManagerMutex.unlock();
     }
 
     for (pal_stream_type_t st_stream_type_to_stop : st_streams) {
