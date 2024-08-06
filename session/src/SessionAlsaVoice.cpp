@@ -2156,6 +2156,12 @@ int SessionAlsaVoice::connectSessionDevice(Stream* streamHandle,
                PAL_ERR(LOG_TAG,"enabling sidetone failed");
            }
         }
+        if (rm->isCRSCallEnabled) {
+            status = populate_rx_mfc_coeff_payload(rxDevice);
+            if (status != 0) {
+                PAL_ERR(LOG_TAG,"populating Rx mfc coeff payload failed :%d", status);
+            }
+        }
     }
     return status;
 }
