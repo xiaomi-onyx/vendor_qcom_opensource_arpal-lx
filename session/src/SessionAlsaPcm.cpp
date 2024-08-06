@@ -170,9 +170,14 @@ int SessionAlsaPcm::prepare(Stream * s)
                     PAL_DBG(LOG_TAG, "Set device ckv");
                     status = setConfig(s, CALIBRATION, HW_EP_TX);
                     if (status != 0) {
-                        PAL_ERR(LOG_TAG,
-                            "Failed to set devicepp ckv, status %d", status);
-                        goto exit;
+                        if (status == -EALREADY) {
+                            PAL_ERR(LOG_TAG, "Calibration already set, ignore");
+                            status = 0;
+                        } else {
+                            PAL_ERR(LOG_TAG,
+                               "Failed to set devicepp ckv, status %d", status);
+                            goto exit;
+                        }
                     }
                 }
                 vaMicChannels = channels;
@@ -1568,7 +1573,8 @@ set_mixer:
                         PAL_ERR(LOG_TAG,"get Device Attributes Failed\n");
                         goto exit;
                     }
-                    if (dAttr.config.ch_info.channels > 1) {
+                    if (dAttr.id == PAL_DEVICE_IN_ULTRASOUND_MIC &&
+                        dAttr.config.ch_info.channels > 1) {
                         builder->payloadDAMPortConfig(&payload, &payloadSize, miid,
                                                       dAttr.config.ch_info.channels);
                         if (payloadSize && payload) {
@@ -3873,22 +3879,16 @@ int SessionAlsaPcm::getParameters(Stream *s, int tagId, uint32_t param_id, void 
         goto exit;
     }
 
-    if (payloadData && payloadSize <= MAX_PCM_PAYLOAD_SIZE) {
+    if (payloadData) {
         status = mixer_ctl_get_array(ctl, payloadData, payloadSize);
         if (0 != status) {
             PAL_ERR(LOG_TAG, "Get custom config failed, status = %d", status);
             goto exit;
         }
     } else {
-        if (!payloadData) {
-            PAL_ERR(LOG_TAG, "Failed to allocate payloadData memory\n");
-            status = -ENOMEM;
-            goto exit;
-        } else {
-            PAL_ERR(LOG_TAG, "Payloadsize exceeds max permissible value");
-            status = -EINVAL;
-            goto exit;
-        }
+        PAL_ERR(LOG_TAG, "Failed to allocate payloadData memory\n");
+        status = -ENOMEM;
+        goto exit;
     }
 
     ptr = (uint8_t *)payloadData + sizeof(struct apm_module_param_data_t);

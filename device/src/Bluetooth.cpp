@@ -1182,6 +1182,7 @@ BtA2dp::BtA2dp(struct pal_device *device, std::shared_ptr<ResourceManager> Rm)
     param_bt_a2dp.a2dp_suspended = false;
     param_bt_a2dp.a2dp_capture_suspended = false;
     param_bt_a2dp.is_force_switch = false;
+    param_bt_a2dp.is_suspend_setparam = false;
     isA2dpOffloadSupported =
             property_get_bool("ro.bluetooth.a2dp_offload.supported", false) &&
             !property_get_bool("persist.bluetooth.a2dp_offload.disabled", false);
@@ -2395,7 +2396,7 @@ int32_t BtA2dp::checkDeviceStatus() {
 std::shared_ptr<Device> BtSco::objRx = nullptr;
 std::shared_ptr<Device> BtSco::objTx = nullptr;
 bool BtSco::isScoOn = false;
-bool BtSco::isWbSpeechEnabled = true;
+bool BtSco::isWbSpeechEnabled = false;
 int  BtSco::swbSpeechMode = SPEECH_MODE_INVALID;
 bool BtSco::isSwbLc3Enabled = false;
 audio_lc3_codec_cfg_t BtSco::lc3CodecInfo = {};
