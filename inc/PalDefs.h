@@ -255,6 +255,19 @@ typedef struct effect_pal_payload_s {
     uint32_t  payload[]; /* TKV uses pal_key_vector_t, while nonTKV uses pal_effect_custom_payload_t */
 } effect_pal_payload_t;
 
+/* Type of Modes for Haptics Device Protection */
+typedef enum {
+    PAL_HAP_MODE_DYNAMIC_CAL = 1,
+    PAL_HAP_MODE_FACTORY_TEST,
+} pal_haptics_mode;
+
+/* Payload For ID: PAL_PARAM_ID_HAPTICS_MODE
+ * Description   : Values for haptics modes
+ */
+typedef struct pal_haptics_payload {
+    pal_haptics_mode operationMode;/* Type of mode for which request is raised */
+} pal_haptics_payload;
+
 /* Type of Modes for Speaker Protection */
 typedef enum {
     PAL_SP_MODE_DYNAMIC_CAL = 1,
@@ -507,6 +520,7 @@ typedef enum {
 typedef enum {
     PAL_STREAM_HAPTICS_RINGTONE,
     PAL_STREAM_HAPTICS_TOUCH = 1,
+    PAL_STREAM_HAPTICS_PCM = 2,
 } pal_stream_haptics_type_t;
 
 #ifdef __cplusplus
@@ -1055,6 +1069,7 @@ typedef enum {
     PAL_PARAM_ID_ASR_FORCE_OUTPUT = 80,
     PAL_PARAM_ID_ASR_OUTPUT = 81,
     PAL_PARAM_ID_ASR_SET_PARAM = 82,
+    PAL_PARAM_ID_HAPTICS_MODE = 83,
 } pal_param_id_type_t;
 
 /** HDMI/DP */
@@ -1225,6 +1240,9 @@ typedef struct  pal_param_haptics_cnfg_t {
     int16_t  strength;
     int32_t time;
     int16_t ch_mask;
+    bool isCompose;
+    int32_t buffer_size;
+    uint8_t *buffer_ptr;
 } pal_param_haptics_cnfg_t;
 
 /* Payload For ID: PAL_PARAM_ID_BT_SCO*
