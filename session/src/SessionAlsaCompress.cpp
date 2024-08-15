@@ -1807,6 +1807,7 @@ int SessionAlsaCompress::stop(Stream * s __unused)
         case PAL_AUDIO_OUTPUT:
             if (compress && playback_started) {
                 status = compress_stop(compress);
+                playback_started = false;
             }
             // Deregister for callback for Soft Pause
             if (isPauseRegistrationDone) {
