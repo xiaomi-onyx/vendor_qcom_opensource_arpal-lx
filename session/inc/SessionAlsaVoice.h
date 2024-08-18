@@ -106,6 +106,7 @@ private:
     pal_device_mute_t dev_mute = {};
     int sideTone_cnt = 0;
     sessionState mState;
+    bool ssr_trigger_enable = false;
 
 public:
 

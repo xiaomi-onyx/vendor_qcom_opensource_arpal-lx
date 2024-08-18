@@ -27,6 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ *
  * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -101,6 +102,12 @@ typedef enum {
     PAL_AUDIO_FMT_COMPRESSED_EXTENDED_RANGE_END     = 0xF0000FFF,  /* Reserved for beginning of 3rd party codecs */
     PAL_AUDIO_FMT_COMPRESSED_RANGE_END   = PAL_AUDIO_FMT_COMPRESSED_EXTENDED_RANGE_END /* Reserved for beginning of 3rd party codecs */
 } pal_audio_fmt_t;
+
+typedef enum {
+    PAL_NOTIFY_START = 1,
+    PAL_NOTIFY_STOP,
+    PAL_NOTIFY_DEVICESWITCH
+} pal_notification_t;
 
 #define PCM_24_BIT_PACKED (0x6u)
 #define PCM_32_BIT (0x3u)
@@ -247,6 +254,19 @@ typedef struct effect_pal_payload_s {
     uint32_t  payloadSize;
     uint32_t  payload[]; /* TKV uses pal_key_vector_t, while nonTKV uses pal_effect_custom_payload_t */
 } effect_pal_payload_t;
+
+/* Type of Modes for Haptics Device Protection */
+typedef enum {
+    PAL_HAP_MODE_DYNAMIC_CAL = 1,
+    PAL_HAP_MODE_FACTORY_TEST,
+} pal_haptics_mode;
+
+/* Payload For ID: PAL_PARAM_ID_HAPTICS_MODE
+ * Description   : Values for haptics modes
+ */
+typedef struct pal_haptics_payload {
+    pal_haptics_mode operationMode;/* Type of mode for which request is raised */
+} pal_haptics_payload;
 
 /* Type of Modes for Speaker Protection */
 typedef enum {
@@ -500,6 +520,7 @@ typedef enum {
 typedef enum {
     PAL_STREAM_HAPTICS_RINGTONE,
     PAL_STREAM_HAPTICS_TOUCH = 1,
+    PAL_STREAM_HAPTICS_PCM = 2,
 } pal_stream_haptics_type_t;
 
 #ifdef __cplusplus
@@ -817,6 +838,12 @@ struct pal_stream_attributes {
     struct pal_media_config out_media_config;    /**<  media config of the output audio samples */
 };
 
+typedef struct pal_callback_config {
+    int32_t noOfPrevDevices, noOfCurrentDevices;
+    pal_device_id_t *prevDevices, *currentDevices;
+    struct pal_stream_attributes streamAttributes;
+} pal_callback_config_t;
+
 /**< Key value pair to identify the topology of a usecase from default  */
 struct modifier_kv  {
     uint32_t key;
@@ -1042,6 +1069,7 @@ typedef enum {
     PAL_PARAM_ID_ASR_FORCE_OUTPUT = 80,
     PAL_PARAM_ID_ASR_OUTPUT = 81,
     PAL_PARAM_ID_ASR_SET_PARAM = 82,
+    PAL_PARAM_ID_HAPTICS_MODE = 83,
 } pal_param_id_type_t;
 
 /** HDMI/DP */
@@ -1212,6 +1240,9 @@ typedef struct  pal_param_haptics_cnfg_t {
     int16_t  strength;
     int32_t time;
     int16_t ch_mask;
+    bool isCompose;
+    int32_t buffer_size;
+    uint8_t *buffer_ptr;
 } pal_param_haptics_cnfg_t;
 
 /* Payload For ID: PAL_PARAM_ID_BT_SCO*
@@ -1664,6 +1695,17 @@ typedef int32_t (*pal_stream_callback)(pal_stream_handle_t *stream_handle,
                                        uint32_t event_id, uint32_t *event_data,
                                        uint32_t event_data_size,
                                        uint64_t cookie);
+
+/** @brief Callback function prototype to be given for
+ *         pal_audio_event_callback.
+ *
+ * \param[in] config - configuration data related to
+ *       stream and device.
+ * \param[in] event - event raised on the stream.
+ * \param[in] isregister - specifies if it is called
+ *       during register of callback.
+ */
+typedef int32_t (*pal_audio_event_callback)(pal_callback_config_t *config, uint32_t event, bool isregister);
 
 /** @brief Callback function prototype to be given for
  *         pal_register_callback.
