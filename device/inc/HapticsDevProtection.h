@@ -91,6 +91,7 @@ protected :
     static struct mixer *hwMixer;
     static struct pcm *rxPcm;
     static struct pcm *txPcm;
+    wsa_haptics_ex_lra_param_t *VIscale;
     static int numberOfChannels;
     static bool mDspCallbackRcvd;
     static haptics_vi_cal_param cbCalData[HAPTICS_MAX_OUT_CHAN];
@@ -115,6 +116,7 @@ public:
     int HapticsDevStartCalibration(int32_t operation_mode);
     void HapticsDevProtectionInit();
     void HapticsDevProtectionDeinit();
+    void PMICHapticsVIScaling(wsa_haptics_ex_lra_param_t *VIpeValue);
     void getHapticsDevTemperatureList();
     static void HapticsDevProtSetDevStatus(bool enable);
     static int setConfig(int type, int tag, int tagValue, int devId, const char *aif);
@@ -131,12 +133,13 @@ public:
     int32_t getParameter(uint32_t param_id, void **param) override;
     int32_t HapticsDevProtProcessingMode(bool flag);
     int HapticsDevProtectionDynamicCal();
-	int HapticsDevProtectionFTM();
+    int HapticsDevProtectionFTM();
     void updateHPcustomPayload();
     static void handleHPCallback (uint64_t hdl, uint32_t event_id, void *event_data,
                                   uint32_t event_size);
     int getCpsDevNumber(std::string mixer);
 //    int32_t getCalibrationData(void **param);
+    int32_t getAndsetVIScalingParameter(uint32_t pcmid, uint32_t miid);
     int32_t getFTMParameter(void **param);
     int32_t getAndsetPersistentParameter(bool flag);
     void disconnectFeandBe(std::vector<int> pcmDevIds, std::string backEndName);
