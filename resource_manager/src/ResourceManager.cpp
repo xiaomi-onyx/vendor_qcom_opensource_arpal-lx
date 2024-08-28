@@ -5687,12 +5687,26 @@ bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
 
 void ResourceManager::voiceUIDeferredSwitchLoop(std::shared_ptr<ResourceManager> rm)
 {
+    bool is_wake_lock_acquired = false;
     PAL_INFO(LOG_TAG, "Enter");
     std::unique_lock<std::mutex> lck(rm->vui_switch_mutex_);
 
     while (!rm->vui_switch_thread_exit_) {
-        if (deferred_switch_cnt_ < 0)
+        if (deferred_switch_cnt_ < 0) {
+            if (is_wake_lock_acquired) {
+                rm->releaseWakeLock();
+                is_wake_lock_acquired = false;
+            }
             rm->vui_switch_cv_.wait(lck);
+            rm->acquireWakeLock();
+            is_wake_lock_acquired = true;
+        }
+
+        if (rm->vui_switch_thread_exit_) {
+            if (is_wake_lock_acquired)
+                rm->releaseWakeLock();
+            break;
+        }
 
         if (deferred_switch_cnt_ > 0) {
             deferred_switch_cnt_--;
@@ -6946,6 +6960,15 @@ void ResourceManager::deinit()
         mixerEventTread.join();
     }
     PAL_DBG(LOG_TAG, "Mixer event thread joined");
+    if (rm && rm->IsLowLatencyBargeinSupported()) {
+        vui_switch_mutex_.lock();
+        vui_switch_thread_exit_ = true;
+        vui_switch_cv_.notify_all();
+        vui_switch_mutex_.unlock();
+        if (vui_deferred_switch_thread_.joinable())
+            vui_deferred_switch_thread_.join();
+        PAL_DBG(LOG_TAG, "VoiceUI deferred switch thread joined");
+    }
     if (sndmon)
         delete sndmon;
 
