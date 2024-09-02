@@ -1635,12 +1635,8 @@ int32_t HapticsDevProtection::setParameter(uint32_t param_id, void *param)
 {
     PAL_DBG(LOG_TAG, "Inside  HapticsDevice Protection Set parameters");
     (void ) param;
-
     if (param_id == PAL_HAP_MODE_FACTORY_TEST)
         HapticsDevProtectionFTM();
-
-    if (param_id == PAL_HAP_MODE_DYNAMIC_CAL)
-        HapticsDevProtectionDynamicCal();
 
     return 0;
 }
