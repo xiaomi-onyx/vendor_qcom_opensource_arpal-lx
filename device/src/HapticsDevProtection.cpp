@@ -42,24 +42,27 @@
 #include "kvh2xml.h"
 #include <agm/agm_api.h>
 
-#include <fstream>
-#include <sstream>
+#include<fstream>
+#include<sstream>
 
-#ifndef PAL_HAP_DEVP_CAL_PATH
-#define PAL_HAP_DEVP_CAL_PATH "/data/vendor/audio/haptics.cal"
-#endif
-
-#ifndef PAL_HAP_DEVP_FTM_PATH
-#define PAL_HAP_DEVP_FTM_PATH "/data/vendor/audio/haptics_ftm.cal"
+#ifndef PAL_HAP_DEVP_TEMP_PATH
+#define PAL_HAP_DEVP_TEMP_PATH "/data/misc/audio/audio.cal"
 #endif
 
 #define PAL_HP_VI_PER_PATH "/data/vendor/audio/haptics_persistent.cal"
 
-#define MIN_HAPTICS_DEV_IDLE_SEC (60 * 1)
+#define MIN_HAPTICS_DEV_IDLE_SEC (60 * 30)
 #define WAKEUP_MIN_IDLE_CHECK (1000 * 30)
 
 #define HAPTICS_DEV_RIGHT_WSA_TEMP "HapticsDevRight WSA Temp"
 #define HAPTICS_DEV_LEFT_WSA_TEMP "HapticsDevLeft WSA Temp"
+
+#define HAPTICS_DEV_RIGHT_WSA_DEV_NUM "HapticsDevRight WSA Get DevNum"
+#define HAPTICS_DEV_LEFT_WSA_DEV_NUM "HapticsDevLeft WSA Get DevNum"
+
+#define TZ_TEMP_MIN_THRESHOLD    (-30)
+#define TZ_TEMP_MAX_THRESHOLD    (80)
+
 /*Set safe temp value to 40C*/
 #define SAFE_HAPTICS_DEV_TEMP 40
 #define SAFE_HAPTICS_DEV_TEMP_Q6 (SAFE_HAPTICS_DEV_TEMP * (1 << 6))
@@ -73,63 +76,8 @@
 #define CALIBRATION_MODE 1
 #define FACTORY_TEST_MODE 2
 
-
-typedef enum haptics_vi_calib_state_t
-{
-
-    HAPTICS_VI_CALIB_STATE_INCORRECT_OP_MODE = 0, // returned if "operation_mode" is not "Thermal Calibration"
-
-    HAPTICS_VI_CALIB_STATE_INACTIVE = 1, // init value
-
-    HAPTICS_VI_CALIB_STATE_WARMUP = 2, // wait state for warmup
-
-    HAPTICS_VI_CALIB_STATE_INPROGRESS = 3, // in calibration state
-
-    HAPTICS_VI_CALIB_STATE_SUCCESS = 4, // calibration successful
-
-    HAPTICS_VI_CALIB_STATE_FAILED = 5, // calibration failed
-
-    HAPTICS_VI_CALIB_STATE_WAIT_FOR_VI = 6, // wait state for vi threshold
-
-    HAPTICS_VI_CALIB_STATE_VI_WAIT_TIMED_OUT = 7, // calibration could not start due to vi signals below threshold
-
-    HAPTICS_VI_CALIB_STATE_LOW_VI = 8, // calibration failed due to vi signals below threshold
-
-    HAPTICS_VI_CALIB_STATE_MAX_VAL = 0xFFFFFFFF // // max 32-bit unsigned value. tells the compiler to use 32-bit data type
-
-} haptics_vi_calib_state_t;
-
-/** @h2xmlp_parameter   {"HAPTICS_VI_CALIB_PARAM", HAPTICS_VI_CALIB_PARAM}
-
-  @h2xmlp_description {Calibration/FTM VI persistent parameter}
-
-  @h2xmlp_toolPolicy  {RTC_READONLY}*/
-
-typedef struct haptics_vi_calib_param_t {
-
-    haptics_vi_calib_state_t state; // Calibration/FTM state
-
-    uint32_t operation_mode;        // Calibration or FTM
-
-    /**< @h2xmle_description {Operation mode in which parameters were estimated.}
-
-      @h2xmle_rangeList   {"Calibration mode"=1;
-
-      "Factory Test Mode"=2} */
-
-    int32_t Re_ohm_q24[HAPTICS_MAX_OUT_CHAN];   // LRA resistance from Calibration/FTM
-
-    int32_t Fres_Hz_q20[HAPTICS_MAX_OUT_CHAN];  // Resonance frequency from Calibration/FTM
-
-    int32_t Bl_q24[HAPTICS_MAX_OUT_CHAN]; // Force factor (Bl) from Calibration/FTM
-
-    int32_t Rms_KgSec_q24[HAPTICS_MAX_OUT_CHAN]; // Mechanical damping from Calibration/FTM
-
-    int32_t Blq_ftm_q24[HAPTICS_MAX_OUT_CHAN];      // Non-linearity estimate for Bl (normalized value) from FTM
-
-    int32_t Le_mH_ftm_q24[HAPTICS_MAX_OUT_CHAN];    // LRA inductance from FTM
-
-} haptics_vi_calib_param_t;
+#define CALIBRATION_STATUS_SUCCESS 3
+#define CALIBRATION_STATUS_FAILURE 4
 
 std::thread HapticsDevProtection::mCalThread;
 std::condition_variable HapticsDevProtection::cv;
@@ -138,15 +86,14 @@ std::mutex HapticsDevProtection::calibrationMutex;
 
 bool HapticsDevProtection::isHapDevInUse;
 bool HapticsDevProtection::calThrdCreated;
-std::atomic<bool> HapticsDevProtection::ftmThrdCreated;
 bool HapticsDevProtection::isDynamicCalTriggered = false;
 struct timespec HapticsDevProtection::devLastTimeUsed;
 struct mixer *HapticsDevProtection::virtMixer;
 struct mixer *HapticsDevProtection::hwMixer;
 haptics_dev_prot_cal_state HapticsDevProtection::hapticsDevCalState;
-haptics_vi_cal_param HapticsDevProtection::cbCalData[HAPTICS_MAX_OUT_CHAN];
 struct pcm * HapticsDevProtection::rxPcm = NULL;
 struct pcm * HapticsDevProtection::txPcm = NULL;
+struct param_id_haptics_th_vi_r0_get_param_t * HapticsDevProtection::callback_data;
 int HapticsDevProtection::numberOfChannels;
 struct pal_device_info HapticsDevProtection::vi_device;
 int HapticsDevProtection::calibrationCallbackStatus;
@@ -221,53 +168,68 @@ void HapticsDevProtection::HapticsDevCalibrateWait()
             std::chrono::milliseconds(WAKEUP_MIN_IDLE_CHECK));
 }
 
-// Callback from DSP for Resistance value
-void HapticsDevProtection::handleHPCallback(uint64_t hdl __unused, uint32_t event_id,
+// Callback from DSP for Ressistance value
+void HapticsDevProtection::handleHPCallback (uint64_t hdl __unused, uint32_t event_id,
                                             void *event_data, uint32_t event_size)
 {
-    haptics_vi_calib_param_t *param_data = nullptr;
+    param_id_haptics_th_vi_r0_get_param_t  *param_data = nullptr;
 
-    PAL_DBG(LOG_TAG, "Got event from DSP 0x%x", event_id);
+    PAL_DBG(LOG_TAG, "Got event from DSP %x", event_id);
 
     if (event_id == EVENT_ID_HAPTICS_VI_CALIBRATION) {
         // Received callback for Calibration state
-        param_data = static_cast<haptics_vi_calib_param_t*>(event_data);
+        param_data = (param_id_haptics_th_vi_r0_get_param_t  *) event_data;
         PAL_DBG(LOG_TAG, "Calibration state %d", param_data->state);
 
-        if (param_data->state == HAPTICS_VI_CALIB_STATE_SUCCESS) {
-            PAL_DBG(LOG_TAG, "Calibration is successful");
-            cbCalData[0].Re_ohm_Cal_q24 = param_data->Re_ohm_q24[0];
-            cbCalData[0].Fres_Hz_Cal_q20 = param_data->Fres_Hz_q20[0];
-            cbCalData[0].Bl_q24 = param_data->Bl_q24[0];
-            cbCalData[0].Rms_KgSec_q24 = param_data->Rms_KgSec_q24[0];
-            cbCalData[0].Blq_ftm_q24 = param_data->Blq_ftm_q24[0];
-            cbCalData[0].Le_mH_ftm_q24 = param_data->Le_mH_ftm_q24[0];
-
+        if (param_data->state == CALIBRATION_STATUS_SUCCESS) {
+            PAL_DBG(LOG_TAG, "Calibration is successfull");
+            callback_data = (param_id_haptics_th_vi_r0_get_param_t  *) calloc(1, event_size);
+            if (!callback_data) {
+                PAL_ERR(LOG_TAG, "Unable to allocate memory");
+            } else {
+                callback_data->state = param_data->state;
+                callback_data->r0_cali_q24[0] = param_data->r0_cali_q24[0];
+                }
+            }
             mDspCallbackRcvd = true;
-            calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_SUCCESS;
+            calibrationCallbackStatus = CALIBRATION_STATUS_SUCCESS;
             cv.notify_all();
-        } else if ((param_data->state == HAPTICS_VI_CALIB_STATE_FAILED) ||
-            (param_data->state == HAPTICS_VI_CALIB_STATE_VI_WAIT_TIMED_OUT) ||
-            (param_data->state == HAPTICS_VI_CALIB_STATE_LOW_VI)) {
-            PAL_DBG(LOG_TAG, "Calibration unsuccessful, state:%d", param_data->state);
-            mDspCallbackRcvd = true;
-            calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_FAILED;
-            cv.notify_all();
-        } else if (param_data->state == HAPTICS_VI_CALIB_STATE_WAIT_FOR_VI) {
-            PAL_DBG(LOG_TAG, "Low VI threshold continue cal, state:%d", param_data->state);
-        } else {
-            PAL_DBG(LOG_TAG, "unexpected cal state :%d, failing cal step", param_data->state);
-            mDspCallbackRcvd = true;
-            calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_FAILED;
-            cv.notify_all();
-        }
     } else {
-            PAL_ERR(LOG_TAG, "received unexpected event id:0x%x", event_id);
+            PAL_DBG(LOG_TAG, "Calibration is unsuccessfull");
             // Restart the calibration and abort current run.
             mDspCallbackRcvd = true;
-            calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_FAILED;
+            calibrationCallbackStatus = CALIBRATION_STATUS_FAILURE;
             cv.notify_all();
     }
+}
+
+
+int HapticsDevProtection::getDevTemperature(int haptics_dev_pos)
+{
+    struct mixer_ctl *ctl;
+    std::string mixer_ctl_name;
+    int status = 0;
+
+    PAL_DBG(LOG_TAG, "Enter  HapticsDevice Get Temperature %d", haptics_dev_pos);
+    if (mixer_ctl_name.empty()) {
+        PAL_DBG(LOG_TAG, "Using default mixer control");
+        mixer_ctl_name = getDefaultHapticsDevTempCtrl(haptics_dev_pos);
+    }
+
+    PAL_DBG(LOG_TAG, "audio_mixer %pK", hwMixer);
+
+    ctl = mixer_get_ctl_by_name(hwMixer, mixer_ctl_name.c_str());
+    if (!ctl) {
+        PAL_ERR(LOG_TAG, "Invalid mixer control: %s\n", mixer_ctl_name.c_str());
+        status = -EINVAL;
+        return status;
+    }
+
+    status = mixer_ctl_get_value(ctl, 0);
+
+    PAL_DBG(LOG_TAG, "Exiting  HapticsDevice Get Temperature %d", status);
+
+    return status;
 }
 
 void HapticsDevProtection::disconnectFeandBe(std::vector<int> pcmDevIds,
@@ -275,7 +237,7 @@ void HapticsDevProtection::disconnectFeandBe(std::vector<int> pcmDevIds,
 
     std::ostringstream disconnectCtrlName;
     std::ostringstream disconnectCtrlNameBe;
-    struct mixer_ctl *disconnectCtrl = nullptr;
+    struct mixer_ctl *disconnectCtrl = NULL;
     struct mixer_ctl *beMetaDataMixerCtrl = nullptr;
     struct agmMetaData deviceMetaData(nullptr, 0);
     uint32_t devicePropId[] = { 0x08000010, 2, 0x2, 0x5 };
@@ -292,7 +254,7 @@ void HapticsDevProtection::disconnectFeandBe(std::vector<int> pcmDevIds,
         goto exit;
     }
 
-    disconnectCtrlNameBe << backEndName << " metadata";
+    disconnectCtrlNameBe<< backEndName << " metadata";
     beMetaDataMixerCtrl = mixer_get_ctl_by_name(virtMixer, disconnectCtrlNameBe.str().data());
     if (!beMetaDataMixerCtrl) {
         ret = -EINVAL;
@@ -305,7 +267,7 @@ void HapticsDevProtection::disconnectFeandBe(std::vector<int> pcmDevIds,
                     deviceMetaData.size);
         free(deviceMetaData.buf);
         deviceMetaData.buf = nullptr;
-    } else {
+    }else {
         PAL_ERR(LOG_TAG, "Error: %d, Device Metadata not cleaned up", ret);
         goto exit;
     }
@@ -326,14 +288,15 @@ exit:
     return;
 }
 
-int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
+int HapticsDevProtection::HapticsDevStartCalibration()
 {
+    FILE *fp;
     struct pal_device device, deviceRx;
     struct pal_channel_info ch_info;
     struct pal_stream_attributes sAttr;
     struct pcm_config config;
-    struct mixer_ctl *connectCtrl = nullptr;
-    struct audio_route *audioRoute = nullptr;
+    struct mixer_ctl *connectCtrl = NULL;
+    struct audio_route *audioRoute = NULL;
     struct agm_event_reg_cfg event_cfg;
     struct agmMetaData deviceMetaData(nullptr, 0);
     struct mixer_ctl *beMetaDataMixerCtrl = nullptr;
@@ -341,13 +304,13 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     uint32_t miid = 0;
     char mSndDeviceName_rx[128] = {0};
     char mSndDeviceName_vi[128] = {0};
-    uint8_t* payload = nullptr;
+    uint8_t* payload = NULL;
     size_t payloadSize = 0;
     uint32_t devicePropId[] = {0x08000010, 1, 0x2};
     bool isTxStarted = false, isRxStarted = false;
     bool isTxFeandBeConnected = false, isRxFeandBeConnected = false;
     std::string backEndNameTx, backEndNameRx;
-    std::vector<std::pair<int, int>> keyVector, calVector;
+    std::vector <std::pair<int, int>> keyVector, calVector;
     std::vector<int> pcmDevIdsRx, pcmDevIdsTx;
     std::shared_ptr<ResourceManager> rm;
     std::ostringstream connectCtrlName;
@@ -357,6 +320,7 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     param_id_haptics_vi_op_mode_param_t modeConfg;
     param_id_haptics_op_mode HpRxModeConfg;
     param_id_haptics_vi_channel_map_cfg_t HapticsviChannelMapConfg;
+    param_id_haptics_vi_ex_FTM_mode_param_t HapticsviExModeConfg;
     session_callback sessionCb;
 
     std::unique_lock<std::mutex> calLock(calibrationMutex);
@@ -368,6 +332,7 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     memset(&modeConfg, 0, sizeof(modeConfg));
     memset(&HapticsviChannelMapConfg, 0, sizeof(HapticsviChannelMapConfg));
     memset(&HpRxModeConfg, 0, sizeof(HpRxModeConfg));
+    memset(&HapticsviExModeConfg, 0, sizeof(HapticsviExModeConfg));
 
     sessionCb = handleHPCallback;
     PayloadBuilder* builder = new PayloadBuilder();
@@ -389,6 +354,7 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     }
 
     // Configure device attribute
+    rm->getChannelMap(&(ch_info.ch_map[0]), vi_device.channels);
     switch (vi_device.channels) {
         case 1 :
             ch_info.channels = CHANNELS_1;
@@ -397,11 +363,10 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
             ch_info.channels = CHANNELS_2;
         break;
         default:
-            PAL_ERR(LOG_TAG, "Unsupported channel. Set default as 2");
+            PAL_DBG(LOG_TAG, "Unsupported channel. Set default as 2");
             ch_info.channels = CHANNELS_2;
         break;
     }
-    rm->getChannelMap(&(ch_info.ch_map[0]), ch_info.channels);
 
     device.config.ch_info = ch_info;
     device.config.sample_rate = vi_device.samplerate;
@@ -418,15 +383,15 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     device.id = PAL_DEVICE_IN_HAPTICS_VI_FEEDBACK;
     ret = rm->getSndDeviceName(device.id , mSndDeviceName_vi);
     if (0 != ret) {
-        PAL_ERR(LOG_TAG, "Failed to obtain vi snd device name for %d", device.id);
+        PAL_ERR(LOG_TAG, "Failed to obtain tx snd device name for %d", device.id);
         goto exit;
     }
 
-    PAL_DBG(LOG_TAG, "VI snd device name %s", mSndDeviceName_vi);
+    PAL_DBG(LOG_TAG, "got the audio_route name %s", mSndDeviceName_vi);
 
     rm->getBackendName(device.id, backEndNameTx);
     if (!strlen(backEndNameTx.c_str())) {
-        PAL_ERR(LOG_TAG, "Failed to obtain vi backend name for %d", device.id);
+        PAL_ERR(LOG_TAG, "Failed to obtain tx backend name for %d", device.id);
         goto exit;
     }
 
@@ -437,7 +402,8 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     }
 
     // Enable VI module
-    switch(ch_info.channels) {
+    //TBD
+    switch(numberOfChannels) {
         case 1 :
             // TODO: check it from RM.xml for left or right configuration
             calVector.push_back(std::make_pair(HAPTICS_PRO_VI_MAP, HAPTICS_VI_LEFT_MONO));
@@ -446,7 +412,7 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
             calVector.push_back(std::make_pair(HAPTICS_PRO_VI_MAP, HAPTICS_VI_LEFT_RIGHT));
         break;
         default :
-            PAL_ERR(LOG_TAG, "Unsupported channel, %d", ch_info.channels);
+            PAL_ERR(LOG_TAG, "Unsupported channel");
             goto exit;
     }
 
@@ -458,10 +424,10 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
         goto exit;
     }
 
-    connectCtrlNameBeVI << backEndNameTx << " metadata";
+    connectCtrlNameBeVI<< backEndNameTx << " metadata";
     beMetaDataMixerCtrl = mixer_get_ctl_by_name(virtMixer, connectCtrlNameBeVI.str().data());
     if (!beMetaDataMixerCtrl) {
-        PAL_ERR(LOG_TAG, "Invalid mixer control for VI: %s", backEndNameTx.c_str());
+        PAL_ERR(LOG_TAG, "invalid mixer control for VI : %s", backEndNameTx.c_str());
         ret = -EINVAL;
         goto exit;
     }
@@ -471,7 +437,8 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
                     deviceMetaData.size);
         free(deviceMetaData.buf);
         deviceMetaData.buf = nullptr;
-    } else {
+    }
+    else {
         PAL_ERR(LOG_TAG, "Device Metadata not set for TX path");
         ret = -EINVAL;
         goto exit;
@@ -479,7 +446,7 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
 
     ret = SessionAlsaUtils::setDeviceMediaConfig(rm, backEndNameTx, &device);
     if (ret) {
-        PAL_ERR(LOG_TAG, "setDeviceMediaConfig for VI feedback device failed");
+        PAL_ERR(LOG_TAG, "setDeviceMediaConfig for feedback device failed");
         goto exit;
     }
 
@@ -509,8 +476,34 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     isTxFeandBeConnected = true;
 
     config.rate = vi_device.samplerate;
-    config.format = SessionAlsaUtils::palToAlsaFormat(device.config.aud_fmt_id);
-    config.channels = ch_info.channels;
+    switch (vi_device.bit_width) {
+        case 32 :
+            config.format = PCM_FORMAT_S32_LE;
+        break;
+        case 24 :
+            config.format = PCM_FORMAT_S24_LE;
+        break;
+        case 16:
+            config.format = PCM_FORMAT_S16_LE;
+        break;
+        default:
+            PAL_DBG(LOG_TAG, "Unsupported bit width. Set default as 16");
+            config.format = PCM_FORMAT_S16_LE;
+        break;
+    }
+
+    switch (vi_device.channels) {
+        case 1 :
+            config.channels = CHANNELS_1;
+        break;
+        case 2 :
+            config.channels = CHANNELS_2;
+        break;
+        default:
+            PAL_DBG(LOG_TAG, "Unsupported channel. Set default as 2");
+            config.channels = CHANNELS_2;
+        break;
+    }
     config.period_size = DEFAULT_PERIOD_SIZE;
     config.period_count = DEFAULT_PERIOD_COUNT;
     config.start_threshold = 0;
@@ -519,6 +512,9 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
 
     flags = PCM_IN;
 
+    // Setting the mode of VI module
+    modeConfg.th_operation_mode = CALIBRATION_MODE;
+
     ret = SessionAlsaUtils::getModuleInstanceId(virtMixer, pcmDevIdsTx.at(0),
                                                 backEndNameTx.c_str(),
                                                 MODULE_HAPTICS_VI, &miid);
@@ -526,31 +522,47 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
         PAL_ERR(LOG_TAG, "Failed to get tag info %x, status = %d", MODULE_HAPTICS_VI, ret);
         goto free_fe;
     }
-    // Setting mode for IV module
-    modeConfg.th_operation_mode = operation_mode;
+
     builder->payloadHapticsDevPConfig(&payload, &payloadSize, miid,
-            PARAM_ID_HAPTICS_VI_OP_MODE_PARAM, (void *)&modeConfg);
+            PARAM_ID_HAPTICS_VI_OP_MODE_PARAM,(void *)&modeConfg);
     if (payloadSize) {
         ret = updateCustomPayload(payload, payloadSize);
         free(payload);
         if (0 != ret) {
             PAL_ERR(LOG_TAG,"updateCustomPayload Failed for VI_OP_MODE_CFG\n");
+            // Fatal error as calibration mode will not be set
             goto free_fe;
         }
     }
 
     // Setting Channel Map configuration for VI module
     // TODO: Move this to ACDB
-    HapticsviChannelMapConfg.num_ch = numberOfChannels * 2;
+    HapticsviChannelMapConfg.num_ch = numberOfChannels *2;
     payloadSize = 0;
 
     builder->payloadHapticsDevPConfig(&payload, &payloadSize, miid,
-              PARAM_ID_HAPTICS_VI_CHANNEL_MAP_CFG, (void *)&HapticsviChannelMapConfg);
+              PARAM_ID_HAPTICS_VI_CHANNEL_MAP_CFG,(void *)&HapticsviChannelMapConfg);
     if (payloadSize) {
         ret = updateCustomPayload(payload, payloadSize);
         free(payload);
         if (0 != ret) {
             PAL_ERR(LOG_TAG," updateCustomPayload Failed for CHANNEL_MAP_CFG\n");
+            // Not a fatal error
+            ret = 0;
+        }
+    }
+
+    // Setting Excursion mode
+    HapticsviExModeConfg.ex_FTM_mode_enable_flag = 0; // Normal Mode
+    payloadSize = 0;
+
+    builder->payloadHapticsDevPConfig(&payload, &payloadSize, miid,
+            PARAM_ID_HAPTICS_VI_EX_FTM_MODE_PARAM,(void *)&HapticsviExModeConfg);
+    if (payloadSize) {
+        ret = updateCustomPayload(payload, payloadSize);
+        free(payload);
+        if (0 != ret) {
+            PAL_ERR(LOG_TAG," updateCustomPayload Failed for EX_VI_MODE_CFG\n");
             // Not a fatal error
             ret = 0;
         }
@@ -589,12 +601,12 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
                       backEndNameTx.c_str(), MODULE_HAPTICS_VI, (void *)&event_cfg,
                       payload_size);
     if (ret) {
-        PAL_ERR(LOG_TAG, "Unable to register event HAP_VI_CALIB");
+        PAL_ERR(LOG_TAG, "Unable to register event to DSP");
         // Fatal Error. Calibration Won't work
         goto err_pcm_open;
     }
 
-    // Register to mixtureControlEvents and wait for Re, F0 and Blq values
+    // Register to mixtureControlEvents and wait for the R0T0 values
     ret = rm->registerMixerEventCallback(pcmDevIdsTx, sessionCb, (uint64_t)this, true);
     if (ret != 0) {
         PAL_ERR(LOG_TAG, "Failed to register callback to rm");
@@ -619,9 +631,21 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
         PAL_ERR(LOG_TAG, "Failed to obtain the rx snd device name");
         goto err_pcm_open;
     }
-    deviceRx.config.ch_info.channels = numberOfChannels;
-    rm->getChannelMap(&(deviceRx.config.ch_info.ch_map[0]), deviceRx.config.ch_info.channels);
 
+    rm->getChannelMap(&(deviceRx.config.ch_info.ch_map[0]), numberOfChannels);
+
+    switch (numberOfChannels) {
+        case 1 :
+            deviceRx.config.ch_info.channels = CHANNELS_1;
+        break;
+        case 2 :
+            deviceRx.config.ch_info.channels = CHANNELS_2;
+        break;
+        default:
+            PAL_DBG(LOG_TAG, "Unsupported channel. Set default as 2");
+            deviceRx.config.ch_info.channels = CHANNELS_2;
+        break;
+    }
     // TODO: Fetch these data from rm.xml
     deviceRx.config.sample_rate = SAMPLINGRATE_48K;
     deviceRx.config.bit_width = BITWIDTH_16;
@@ -629,7 +653,7 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
 
     rm->getBackendName(deviceRx.id, backEndNameRx);
     if (!strlen(backEndNameRx.c_str())) {
-        PAL_ERR(LOG_TAG, "Failed to obtain rx backend name for %d", deviceRx.id);
+        PAL_ERR(LOG_TAG, "Failed to obtain tx backend name for %d", deviceRx.id);
         goto err_pcm_open;
     }
 
@@ -646,13 +670,13 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     switch (numberOfChannels) {
         case 1 :
             // TODO: Fetch the configuration from RM.xml
-            calVector.push_back(std::make_pair(HAPTICS_PRO_DEV_MAP, HAPTICS_LEFT_MONO));
+            calVector.push_back(std::make_pair(HAPTICS_PRO_DEV_MAP, HAPTICS_RIGHT_MONO));
         break;
         case 2 :
             calVector.push_back(std::make_pair(HAPTICS_PRO_DEV_MAP, HAPTICS_LEFT_RIGHT));
         break;
         default :
-            PAL_ERR(LOG_TAG, "Unsupported channels for Haptics RX Device");
+            PAL_ERR(LOG_TAG, "Unsupported channels for HapticsDevice ");
             goto err_pcm_open;
     }
 
@@ -664,7 +688,7 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
         goto err_pcm_open;
     }
 
-    connectCtrlNameBe << backEndNameRx << " metadata";
+    connectCtrlNameBe<< backEndNameRx << " metadata";
 
     beMetaDataMixerCtrl = mixer_get_ctl_by_name(virtMixer, connectCtrlNameBe.str().data());
     if (!beMetaDataMixerCtrl) {
@@ -678,7 +702,8 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
                                     deviceMetaData.size);
         free(deviceMetaData.buf);
         deviceMetaData.buf = nullptr;
-    } else {
+    }
+    else {
         PAL_ERR(LOG_TAG, "Device Metadata not set for RX path");
         ret = -EINVAL;
         goto err_pcm_open;
@@ -686,7 +711,7 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
 
     ret = SessionAlsaUtils::setDeviceMediaConfig(rm, backEndNameRx, &deviceRx);
     if (ret) {
-        PAL_ERR(LOG_TAG, "setDeviceMediaConfig for Haptics RX Device failed");
+        PAL_ERR(LOG_TAG, "setDeviceMediaConfig for HapticsDevice failed");
         goto err_pcm_open;
     }
 
@@ -718,7 +743,10 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
 
     config.rate = SAMPLINGRATE_48K;
     config.format = PCM_FORMAT_S16_LE;
-    config.channels = numberOfChannels;
+    if (numberOfChannels > 1)
+        config.channels = CHANNELS_2;
+    else
+        config.channels = CHANNELS_1;
     config.period_size = DEFAULT_PERIOD_SIZE;
     config.period_count = DEFAULT_PERIOD_COUNT;
     config.start_threshold = 0;
@@ -727,13 +755,13 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
 
     flags = PCM_OUT;
 
-    // Set the operation mode for Haptics RX module
-    HpRxModeConfg.operation_mode = operation_mode; //CALIBRATION_MODE;
+    // Set the operation mode for SP module
+    HpRxModeConfg.operation_mode = CALIBRATION_MODE;
     ret = SessionAlsaUtils::getModuleInstanceId(virtMixer, pcmDevIdsRx.at(0),
                                                 backEndNameRx.c_str(),
                                                 MODULE_HAPTICS_GEN, &miid);
     if (0 != ret) {
-        PAL_ERR(LOG_TAG, "Failed to get miid info %x(%d)", MODULE_HAPTICS_GEN, ret);
+        PAL_ERR(LOG_TAG, "Failed to get miid info %x, status = %d", MODULE_SP, ret);
         goto err_pcm_open;
     }
 
@@ -755,12 +783,12 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
         }
     }
 
-    // Setting the values for Haptics RX module
+    // Setting the values for SP module
     if (customPayloadSize) {
         ret = SessionAlsaUtils::setDeviceCustomPayload(rm, backEndNameRx,
                     customPayload, customPayloadSize);
         if (ret) {
-            PAL_ERR(LOG_TAG, "Unable to set custom param for calibration mode");
+            PAL_ERR(LOG_TAG, "Unable to set custom param for SP mode");
             free(customPayload);
             customPayloadSize = 0;
             goto err_pcm_open;
@@ -780,6 +808,7 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
         goto err_pcm_open;
     }
 
+
     enableDevice(audioRoute, mSndDeviceName_rx);
     PAL_DBG(LOG_TAG, "pcm start for RX path");
     if (pcm_start(rxPcm) < 0) {
@@ -794,40 +823,35 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     PAL_DBG(LOG_TAG, "Waiting for the event from DSP or PAL");
 
     // TODO: Make this to wait in While loop
-    //cv.wait(calLock);
-    if (cv.wait_for(calLock, std::chrono::seconds(5)) == std::cv_status::timeout) {
-        PAL_ERR(LOG_TAG, "Timeout occured! for VI calibration");
-        goto done;
-    }
+    cv.wait(calLock);
 
-    // Store haptics calibrated values Re, f0, Blq
+    // Store the R0T0 values
     if (mDspCallbackRcvd) {
-        if (calibrationCallbackStatus == HAPTICS_VI_CALIB_STATE_SUCCESS) {
-            PAL_DBG(LOG_TAG, "haptics calibration success! op_mode:%d", operation_mode);
-            std::ofstream outFile;
-            if (operation_mode == FACTORY_TEST_MODE)
-                outFile.open(PAL_HAP_DEVP_FTM_PATH, std::ios::binary);
-            else
-                outFile.open(PAL_HAP_DEVP_CAL_PATH, std::ios::binary);
-            if (!outFile.is_open()) {
+        if (calibrationCallbackStatus == CALIBRATION_STATUS_SUCCESS) {
+            PAL_DBG(LOG_TAG, "Calibration is done");
+            fp = fopen(PAL_HAP_DEVP_TEMP_PATH, "wb");
+            if (!fp) {
                 PAL_ERR(LOG_TAG, "Unable to open file for write");
             } else {
-                PAL_DBG(LOG_TAG, "Write calibrated values to file");
+                PAL_DBG(LOG_TAG, "Write the R0T0 value to file");
                 for (i = 0; i < numberOfChannels; i++) {
-                      outFile.write(reinterpret_cast<char*>(&cbCalData[i]), sizeof(cbCalData[0]));
+                    fwrite(&callback_data->r0_cali_q24[i],
+                                sizeof(callback_data->r0_cali_q24[i]), 1, fp);
+                    fwrite(&devTempList[i], sizeof(int16_t), 1, fp);
                 }
                 hapticsDevCalState = HAPTICS_DEV_CALIBRATED;
-                outFile.close();
+                free(callback_data);
+                fclose(fp);
             }
-        } else if (calibrationCallbackStatus == HAPTICS_VI_CALIB_STATE_FAILED) {
-            PAL_DBG(LOG_TAG, "haptics calibration unsuccessful!");
+        }
+        else if (calibrationCallbackStatus == CALIBRATION_STATUS_FAILURE) {
+            PAL_DBG(LOG_TAG, "Calibration is not done");
             hapticsDevCalState = HAPTICS_DEV_NOT_CALIBRATED;
             // reset the timer for retry
             clock_gettime(CLOCK_BOOTTIME, &devLastTimeUsed);
         }
     }
 
-done:
 err_pcm_open :
     if (txPcm) {
         event_cfg.is_register = 0;
@@ -900,35 +924,6 @@ exit:
     return ret;
 }
 
-/* LRA temperature unused currently */
-int HapticsDevProtection::getDevTemperature(int haptics_dev_pos)
-{
-    struct mixer_ctl *ctl;
-    std::string mixer_ctl_name;
-    int status = 0;
-
-    PAL_DBG(LOG_TAG, "Enter: HapticsDevice Get Temperature %d", haptics_dev_pos);
-    if (mixer_ctl_name.empty()) {
-        PAL_DBG(LOG_TAG, "Using default mixer control");
-        mixer_ctl_name = getDefaultHapticsDevTempCtrl(haptics_dev_pos);
-    }
-
-    PAL_DBG(LOG_TAG, "audio_mixer %pK", hwMixer);
-
-    ctl = mixer_get_ctl_by_name(hwMixer, mixer_ctl_name.c_str());
-    if (!ctl) {
-        PAL_ERR(LOG_TAG, "Invalid mixer control: %s\n", mixer_ctl_name.c_str());
-        status = -EINVAL;
-        return status;
-    }
-
-    status = mixer_ctl_get_value(ctl, 0);
-
-    PAL_DBG(LOG_TAG, "Exit: HapticsDevice Get Temperature %d", status);
-
-    return status;
-}
-
 /**
   * This function sets the temperature of each HapticsDevics.
   * Currently values are supported like:
@@ -949,22 +944,13 @@ void HapticsDevProtection::getHapticsDevTemperatureList()
     PAL_DBG(LOG_TAG, "Exit  HapticsDevice Get Temperature List");
 }
 
-void HapticsDevProtection::HapticsDevFTMThread()
-{
-    PAL_DBG(LOG_TAG, "start Haptics FTM");
-    HapticsDevStartCalibration(FACTORY_TEST_MODE);
-    ftmThrdCreated.store(false);
-    PAL_DBG(LOG_TAG, "Haptics FTM done, exiting ftmThread");
-}
-
 void HapticsDevProtection::HapticsDevCalibrationThread()
 {
     unsigned long sec = 0;
     bool proceed = false;
     int i;
-    int retry = 2;
 
-    while (!threadExit && retry) {
+    while (!threadExit) {
         PAL_DBG(LOG_TAG, "Inside calibration while loop");
         proceed = false;
         if (isHapticsDevInUse(&sec)) {
@@ -972,11 +958,13 @@ void HapticsDevProtection::HapticsDevCalibrationThread()
             HapticsDevCalibrateWait();
             PAL_DBG(LOG_TAG, "Waiting done");
             continue;
-        } else {
+        }
+        else {
             PAL_DBG(LOG_TAG, "HapticsDev not in use");
             if (isDynamicCalTriggered) {
                 PAL_DBG(LOG_TAG, "Dynamic Calibration triggered");
-            } else if (0) /*(sec < minIdleTime)*/ {
+            }
+            else if (sec < minIdleTime) {
                 PAL_DBG(LOG_TAG, "HapticsDev not idle for minimum time. %lu", sec);
                 HapticsDevCalibrateWait();
                 PAL_DBG(LOG_TAG, "Waited for HapticsDev to be idle for min time");
@@ -986,17 +974,60 @@ void HapticsDevProtection::HapticsDevCalibrationThread()
         }
 
         if (proceed) {
+            PAL_DBG(LOG_TAG, "Getting temperature of HapticsDev");
+            getHapticsDevTemperatureList();
+
+            for (i = 0; i < numberOfChannels; i++) {
+                if ((devTempList[i] != -EINVAL) &&
+                    (devTempList[i] < TZ_TEMP_MIN_THRESHOLD ||
+                     devTempList[i] > TZ_TEMP_MAX_THRESHOLD)) {
+                    PAL_ERR(LOG_TAG, "Temperature out of range. Retry");
+                    HapticsDevCalibrateWait();
+                    continue;
+                }
+            }
+            for (i = 0; i < numberOfChannels; i++) {
+                // Converting to Q6 format
+                devTempList[i] = (devTempList[i]*(1<<6));
+            }
+        }
+        else {
+            continue;
+        }
+
+        // Check whether HapticsDevice  was in use in the meantime when temperature
+        // was being read.
+        proceed = false;
+        if (isHapticsDevInUse(&sec)) {
+            PAL_DBG(LOG_TAG, " HapticsDevice in use. Wait for proper time");
+            HapticsDevCalibrateWait();
+            PAL_DBG(LOG_TAG, "Waiting done");
+            continue;
+        }
+        else {
+            PAL_DBG(LOG_TAG, " HapticsDevice not in use");
+            if (isDynamicCalTriggered) {
+                PAL_DBG(LOG_TAG, "Dynamic calibration triggered");
+            }
+            else if (sec < minIdleTime) {
+                PAL_DBG(LOG_TAG, " HapticsDevice not idle for minimum time. %lu", sec);
+                HapticsDevCalibrateWait();
+                PAL_DBG(LOG_TAG, "Waited for HapticsDevice to be idle for min time");
+                continue;
+            }
+            proceed = true;
+        }
+
+        if (proceed) {
             // Start calibrating the HapticsDevice.
-            PAL_DBG(LOG_TAG, "HapticsDevice not in use, start calibration");
-            HapticsDevStartCalibration(CALIBRATION_MODE);
+            PAL_DBG(LOG_TAG, " HapticsDevice not in use, start calibration");
+            HapticsDevStartCalibration();
             if (hapticsDevCalState == HAPTICS_DEV_CALIBRATED) {
                 threadExit = true;
-            } else {
-                retry--;
             }
-        } else {
+        }
+        else {
             continue;
-            retry--;
         }
     }
     isDynamicCalTriggered = false;
@@ -1009,6 +1040,7 @@ HapticsDevProtection::HapticsDevProtection(struct pal_device *device,
 {
     int status = 0;
     struct pal_device_info devinfo = {};
+    FILE *fp;
 
     minIdleTime = MIN_HAPTICS_DEV_IDLE_SEC;
 
@@ -1019,7 +1051,6 @@ HapticsDevProtection::HapticsDevProtection(struct pal_device *device,
 
     threadExit = false;
     calThrdCreated = false;
-    ftmThrdCreated.store(false);
 
     triggerCal = false;
     hapticsDevCalState = HAPTICS_DEV_NOT_CALIBRATED;
@@ -1028,12 +1059,13 @@ HapticsDevProtection::HapticsDevProtection(struct pal_device *device,
     isHapDevInUse = false;
 
     rm->getDeviceInfo(PAL_DEVICE_OUT_HAPTICS_DEVICE, PAL_STREAM_PROXY, "", &devinfo);
-    numberOfChannels = (devinfo.channels >= 2) ? CHANNELS_2 : CHANNELS_1;
+    numberOfChannels = devinfo.channels;
     PAL_DBG(LOG_TAG, "Number of Channels %d", numberOfChannels);
 
     rm->getDeviceInfo(PAL_DEVICE_IN_HAPTICS_VI_FEEDBACK, PAL_STREAM_PROXY, "", &vi_device);
     PAL_DBG(LOG_TAG, "Number of Channels for VI path is %d", vi_device.channels);
 
+    devTempList = new int [numberOfChannels];
     // Get current time
     clock_gettime(CLOCK_BOOTTIME, &devLastTimeUsed);
 
@@ -1047,15 +1079,26 @@ HapticsDevProtection::HapticsDevProtection(struct pal_device *device,
         PAL_ERR(LOG_TAG,"hw mixer error %d", status);
     }
 
-    calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_INACTIVE;
+    calibrationCallbackStatus = 0;
     mDspCallbackRcvd = false;
-    mCalThread = std::thread(&HapticsDevProtection::HapticsDevCalibrationThread,
-                             this);
-    calThrdCreated = true;
+
+/*    fp = fopen(PAL_HAP_DEVP_TEMP_PATH, "rb");
+    if (fp) {
+        PAL_DBG(LOG_TAG, "Cal File exists. Reading from it");
+        hapticsDevCalState = HAPTICS_DEV_CALIBRATED;
+    }
+    else {
+        PAL_DBG(LOG_TAG, "Calibration Not done");
+        mCalThread = std::thread(&HapticsDevProtection::HapticsDevCalibrationThread,
+                            this);
+        calThrdCreated = true;
+    }*/
 }
 
 HapticsDevProtection::~HapticsDevProtection()
 {
+    if (devTempList)
+        delete[] devTempList;
 }
 
 /*
@@ -1068,7 +1111,7 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
 {
     int ret = 0, dir = TX_HOSTLESS, flags, viParamId = 0;
     char mSndDeviceName_vi[128] = {0};
-    uint8_t* payload = nullptr;
+    uint8_t* payload = NULL;
     uint32_t devicePropId[] = {0x08000010, 1, 0x2};
     uint32_t miid = 0;
     bool isTxFeandBeConnected = true;
@@ -1077,10 +1120,11 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
     struct pal_channel_info ch_info;
     struct pal_stream_attributes sAttr;
     struct pcm_config config;
-    struct mixer_ctl *connectCtrl = nullptr;
-    struct audio_route *audioRoute = nullptr;
+    struct mixer_ctl *connectCtrl = NULL;
+    struct audio_route *audioRoute = NULL;
     struct agmMetaData deviceMetaData(nullptr, 0);
     struct mixer_ctl *beMetaDataMixerCtrl = nullptr;
+    FILE *fp;
     std::string backEndName, backEndNameRx;
     std::vector <std::pair<int, int>> keyVector;
     std::vector <std::pair<int, int>> calVector;
@@ -1088,20 +1132,22 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
     std::ostringstream connectCtrlNameBeVI;
     std::ostringstream connectCtrlNameBeHP;
     std::ostringstream connectCtrlName;
+    param_id_haptics_th_vi_r0t0_set_param_t *hpR0T0confg;
+    param_id_haptics_ex_vi_persistent *VIpeValue;
     param_id_haptics_vi_op_mode_param_t modeConfg;
     param_id_haptics_vi_channel_map_cfg_t HapticsviChannelMapConfg;
     param_id_haptics_op_mode hpModeConfg;
+    //param_id_haptics_vi_ex_FTM_mode_param_t HapticsviExModeConfg;
     std::shared_ptr<Device> dev = nullptr;
-    Stream *stream = nullptr;
-    Session *session = nullptr;
+    Stream *stream = NULL;
+    Session *session = NULL;
     std::vector<Stream*> activeStreams;
     PayloadBuilder* builder = new PayloadBuilder();
-
     std::unique_lock<std::mutex> lock(calibrationMutex);
 
     PAL_DBG(LOG_TAG, "Flag %d", flag);
-
     deviceMutex.lock();
+
 
     if (flag) {
         if (hapticsDevCalState == HAPTICS_DEV_CALIB_IN_PROGRESS) {
@@ -1110,8 +1156,8 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
             // Wait for cleanup
             cv.wait(lock);
             hapticsDevCalState = HAPTICS_DEV_NOT_CALIBRATED;
-            txPcm = nullptr;
-            rxPcm = nullptr;
+            txPcm = NULL;
+            rxPcm = NULL;
             PAL_DBG(LOG_TAG, "Stopped calibration mode");
         }
         numberOfRequest++;
@@ -1126,7 +1172,7 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
             free(customPayload);
         }
         customPayloadSize = 0;
-        customPayload = nullptr;
+        customPayload = NULL;
 
         HapticsDevProtSetDevStatus(flag);
         //  HapticsDevice in use. Start the Processing Mode
@@ -1141,10 +1187,17 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
         memset(&config, 0, sizeof(config));
         memset(&modeConfg, 0, sizeof(modeConfg));
         memset(&HapticsviChannelMapConfg, 0, sizeof(HapticsviChannelMapConfg));
+        //memset(&HapticsviExModeConfg, 0, sizeof(HapticsviExModeConfg));
         memset(&hpModeConfg, 0, sizeof(hpModeConfg));
 
         keyVector.clear();
         calVector.clear();
+
+        if (customPayload) {
+            free(customPayload);
+            customPayloadSize = 0;
+            customPayload = NULL;
+        }
 
         // Configure device attribute
        if (vi_device.channels > 1) {
@@ -1174,11 +1227,11 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
 
         ret = rm->getSndDeviceName(device.id , mSndDeviceName_vi);
         if (0 != ret) {
-            PAL_ERR(LOG_TAG, "Failed to obtain tx VI snd device name for %d", device.id);
+            PAL_ERR(LOG_TAG, "Failed to obtain tx snd device name for %d", device.id);
             goto exit;
         }
 
-        PAL_DBG(LOG_TAG, "VI snd device name %s", mSndDeviceName_vi);
+        PAL_DBG(LOG_TAG, "get the audio route %s", mSndDeviceName_vi);
 
         rm->getBackendName(device.id, backEndName);
         if (!strlen(backEndName.c_str())) {
@@ -1193,7 +1246,7 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
         }
 
         // Enable the VI module
-        switch (numberOfChannels) {  //or ch_info.channels ? 
+        switch (numberOfChannels) {
             case 1 :
                 calVector.push_back(std::make_pair(HAPTICS_PRO_VI_MAP, HAPTICS_VI_LEFT_MONO));
             break;
@@ -1201,7 +1254,7 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
                 calVector.push_back(std::make_pair(HAPTICS_PRO_VI_MAP, HAPTICS_VI_LEFT_RIGHT));
             break;
             default :
-                PAL_ERR(LOG_TAG, "Unsupported channel %d", numberOfChannels);
+                PAL_ERR(LOG_TAG, "Unsupported channel");
                 goto exit;
         }
 
@@ -1212,7 +1265,7 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
             ret = -ENOMEM;
             goto exit;
         }
-        connectCtrlNameBeVI << backEndName << " metadata";
+        connectCtrlNameBeVI<< backEndName << " metadata";
         beMetaDataMixerCtrl = mixer_get_ctl_by_name(virtMixer,
                                     connectCtrlNameBeVI.str().data());
         if (!beMetaDataMixerCtrl) {
@@ -1267,8 +1320,34 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
         isTxFeandBeConnected = true;
 
         config.rate = vi_device.samplerate;
-        config.format = SessionAlsaUtils::palToAlsaFormat(device.config.aud_fmt_id);
-        config.channels = ch_info.channels;
+        switch (vi_device.bit_width) {
+            case 32 :
+                config.format = PCM_FORMAT_S32_LE;
+            break;
+            case 24 :
+                config.format = PCM_FORMAT_S24_LE;
+            break;
+            case 16 :
+                config.format = PCM_FORMAT_S16_LE;
+            break;
+            default:
+                PAL_DBG(LOG_TAG, "Unsupported bit width. Set default as 16");
+                config.format = PCM_FORMAT_S16_LE;
+            break;
+        }
+
+        switch (vi_device.channels) {
+            case 1 :
+                config.channels = CHANNELS_1;
+            break;
+            case 2 :
+                config.channels = CHANNELS_2;
+            break;
+            default :
+                PAL_DBG(LOG_TAG, "Unsupported channel. Set default as 2");
+                config.channels = CHANNELS_2;
+            break;
+        }
         config.period_size = DEFAULT_PERIOD_SIZE;
         config.period_count = DEFAULT_PERIOD_COUNT;
         config.start_threshold = 0;
@@ -1277,6 +1356,9 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
 
         flags = PCM_IN;
 
+        // Setting the mode of VI module
+        modeConfg.th_operation_mode = NORMAL_MODE;
+
         ret = SessionAlsaUtils::getModuleInstanceId(virtMixer, pcmDevIdTx.at(0),
                         backEndName.c_str(), MODULE_HAPTICS_VI, &miid);
         if (0 != ret) {
@@ -1284,8 +1366,6 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
             goto free_fe;
         }
 
-        // Setting the mode of VI module
-        modeConfg.th_operation_mode = NORMAL_MODE;
         builder->payloadHapticsDevPConfig(&payload, &payloadSize, miid,
                                  PARAM_ID_HAPTICS_VI_OP_MODE_PARAM,(void *)&modeConfg);
         if (payloadSize) {
@@ -1507,68 +1587,6 @@ exit:
     return;
 }
 
-int32_t HapticsDevProtection::getFTMParameter(void **param)
-{
-    int ret = 0;
-    int32_t payload_size = 0;
-    std::ifstream inFile;
-    std::ostringstream resString;
-    haptics_vi_cal_param FtmCalParam;
-
-    inFile.open(PAL_HAP_DEVP_FTM_PATH, std::ios::binary | std::ios::in);
-    if (!inFile.is_open()) {
-        PAL_ERR(LOG_TAG, "Unable to open file for read");
-        ret = -EINVAL;
-        goto exit;
-    }
-    inFile.read(reinterpret_cast<char*>(&FtmCalParam), sizeof(haptics_vi_cal_param));
-    inFile.close();
-
-    resString << "HapticsParamStatus: " <<  "; Re: "
-              << ((FtmCalParam.Re_ohm_Cal_q24)/(1<<24)) << "; Fres: "
-              << ((FtmCalParam.Fres_Hz_Cal_q20)/(1<<20)) << "; Bl: "
-              << ((FtmCalParam.Bl_q24)/(1<<24)) << "; Rms: "
-              << ((FtmCalParam.Rms_KgSec_q24)/(1<<24)) << "; Blq: "
-              << ((FtmCalParam.Blq_ftm_q24)/(1<<24)) << "; Le: "
-              << ((FtmCalParam.Le_mH_ftm_q24)/(1<<24));
-
-    PAL_DBG(LOG_TAG, "Get param value %s, length:%d",
-            resString.str().c_str(), resString.str().length());
-    if (resString.str().length() > 0 && ((*param) != nullptr)) {
-        payload_size = resString.str().length() + 1;
-        strlcpy(static_cast<char*>(*param), resString.str().c_str(),
-                payload_size);
-        ret = payload_size;
-    }
-exit:
-    return ret;
-}
-
-int HapticsDevProtection::HapticsDevProtectionFTM()
-{
-    int ret = 0;
-
-    PAL_DBG(LOG_TAG, "Enter");
-
-    if (ftmThrdCreated.load()) {
-        PAL_DBG(LOG_TAG, "FTM thread already running, Thread State %d, exiting",
-                        ftmThrdCreated.load());
-        return ret;
-    }
-
-    calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_INACTIVE;
-    mDspCallbackRcvd = false;
-    ftmThrdCreated.store(true);
-
-    PAL_DBG(LOG_TAG, "creating Haptics FTM thread");
-    std::thread dynamicFTMThread(&HapticsDevProtection::HapticsDevFTMThread, this);
-
-    dynamicFTMThread.detach();
-
-    PAL_DBG(LOG_TAG, "Exit");
-
-    return ret;
-}
 
 int HapticsDevProtection::HapticsDevProtectionDynamicCal()
 {
@@ -1585,7 +1603,7 @@ int HapticsDevProtection::HapticsDevProtectionDynamicCal()
     threadExit = false;
     hapticsDevCalState = HAPTICS_DEV_NOT_CALIBRATED;
 
-    calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_INACTIVE;
+    calibrationCallbackStatus = 0;
     mDspCallbackRcvd = false;
 
     calThrdCreated = true;
@@ -1635,25 +1653,9 @@ int32_t HapticsDevProtection::setParameter(uint32_t param_id, void *param)
 {
     PAL_DBG(LOG_TAG, "Inside  HapticsDevice Protection Set parameters");
     (void ) param;
-    if (param_id == PAL_HAP_MODE_FACTORY_TEST)
-        HapticsDevProtectionFTM();
-
+    if (param_id == PAL_SP_MODE_DYNAMIC_CAL)
+        HapticsDevProtectionDynamicCal();
     return 0;
-}
-
-int32_t HapticsDevProtection::getParameter(uint32_t param_id, void **param)
-{
-    int32_t status = 0;
-    switch(param_id) {
-        case PAL_PARAM_ID_HAPTICS_MODE:
-            status = getFTMParameter(param);
-        break;
-        default :
-            PAL_ERR(LOG_TAG, "Unsupported operation");
-            status = -EINVAL;
-        break;
-    }
-    return status;
 }
 
 int32_t HapticsDevProtection::getAndsetPersistentParameter(bool flag)
@@ -1675,8 +1677,9 @@ int32_t HapticsDevProtection::getAndsetPersistentParameter(bool flag)
 
     pcmDeviceName = rm->getDeviceNameFromID(pcmDevIdTx.at(0));
     if (pcmDeviceName) {
-        cntrlName << pcmDeviceName << " " << getParamControl;
-    } else {
+        cntrlName<<pcmDeviceName<<" "<<getParamControl;
+    }
+    else {
         PAL_ERR(LOG_TAG, "Error: %d Unable to get Device name\n", -EINVAL);
         goto exit;
     }
@@ -1779,6 +1782,7 @@ int32_t HapticsDevProtection::getAndsetPersistentParameter(bool flag)
                      PAL_ERR(LOG_TAG, "persistent values VIpeValue->Fres_Hz_q20[i] =%d",VIpeValue->Fres_Hz_q20[i]);
             }
             fclose(fp);
+//            return 0;
         }
         else {
             PAL_DBG(LOG_TAG, "Use the default Persistent values");
@@ -1885,7 +1889,7 @@ void HapticsDevFeedback::updateVIcustomPayload()
         return;
     }
     hpR0T0confg->num_channels = numDevice;
-    fp = fopen(PAL_HAP_DEVP_CAL_PATH, "rb");
+    fp = fopen(PAL_HAP_DEVP_TEMP_PATH, "rb");
     if (fp) {
         PAL_DBG(LOG_TAG, " HapticsDevice calibrated. Send calibrated value");
         for (int i = 0; i < numDevice; i++) {

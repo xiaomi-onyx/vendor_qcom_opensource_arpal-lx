@@ -4382,6 +4382,7 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
             {
                 param_id_haptics_vi_op_mode_param_t  *HpConf;
                 param_id_haptics_vi_op_mode_param_t  *data;
+                uint32_t *channelMap;
 
                 data = (param_id_haptics_vi_op_mode_param_t *) param;
 
@@ -4397,7 +4398,7 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
                 header = (struct apm_module_param_data_t*) payloadInfo;
 
                 HpConf = (param_id_haptics_vi_op_mode_param_t *) (payloadInfo +
-                                sizeof(struct apm_module_param_data_t));
+                                sizeof(struct param_id_haptics_vi_op_mode_param_t));
                 HpConf->th_operation_mode = data->th_operation_mode;
             }
         break;

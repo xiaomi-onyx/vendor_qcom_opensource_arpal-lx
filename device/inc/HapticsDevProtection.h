@@ -57,21 +57,13 @@ typedef enum haptics_dev_prot_cal_state {
 typedef enum haptics_dev_prot_proc_state {
     HAPTICS_DEV_PROCESSING_IN_IDLE,     /* Processing mode in idle state */
     HAPTICS_DEV_PROCESSING_IN_PROGRESS, /* Processing mode in running state */
-} haptics_dev_prot_proc_state;
+}haptics_dev_prot_proc_state;
 
 enum {
     HAPTICS_DEV_RIGHT,    /* Right HapticsDev */
     HAPTICS_DEV_LEFT,     /* Left HapticsDev */
 };
 
-struct haptics_vi_cal_param {
-    int32_t Re_ohm_Cal_q24 = 0;  // cal & ftm
-    int32_t Fres_Hz_Cal_q20 = 0; // cal & ftm
-    int32_t Bl_q24 = 0;          // cal & ftm
-    int32_t Rms_KgSec_q24 = 0;   // cal & ftm
-    int32_t Blq_ftm_q24 = 0;     // ftm
-    int32_t Le_mH_ftm_q24 = 0;   // ftm
-};
 
 class HapticsDevProtection : public HapticsDev
 {
@@ -85,7 +77,6 @@ protected :
     int *devTempList;
     static bool isHapDevInUse;
     static bool calThrdCreated;
-    static std::atomic<bool> ftmThrdCreated;
     static bool isDynamicCalTriggered;
     static struct timespec devLastTimeUsed;
     static struct mixer *virtMixer;
@@ -94,7 +85,7 @@ protected :
     static struct pcm *txPcm;
     static int numberOfChannels;
     static bool mDspCallbackRcvd;
-    static haptics_vi_cal_param cbCalData[HAPTICS_MAX_OUT_CHAN];
+    static param_id_haptics_th_vi_r0_get_param_t  *callback_data;
     struct pal_device mDeviceAttr;
     std::vector<int> pcmDevIdTx;
     static int calibrationCallbackStatus;
@@ -110,10 +101,9 @@ public:
     std::mutex deviceMutex;
     static std::mutex calibrationMutex;
     void HapticsDevCalibrationThread();
-    void HapticsDevFTMThread();
     int getDevTemperature(int haptics_dev_pos);
     void HapticsDevCalibrateWait();
-    int HapticsDevStartCalibration(int32_t operation_mode);
+    int HapticsDevStartCalibration();
     void HapticsDevProtectionInit();
     void HapticsDevProtectionDeinit();
     void getHapticsDevTemperatureList();
@@ -129,16 +119,15 @@ public:
     int32_t stop();
 
     int32_t setParameter(uint32_t param_id, void *param) override;
-    int32_t getParameter(uint32_t param_id, void **param) override;
+//    int32_t getParameter(uint32_t param_id, void **param) override;
     int32_t HapticsDevProtProcessingMode(bool flag);
     int HapticsDevProtectionDynamicCal();
-	int HapticsDevProtectionFTM();
     void updateHPcustomPayload();
     static void handleHPCallback (uint64_t hdl, uint32_t event_id, void *event_data,
                                   uint32_t event_size);
     int getCpsDevNumber(std::string mixer);
 //    int32_t getCalibrationData(void **param);
-    int32_t getFTMParameter(void **param);
+//    int32_t getFTMParameter(void **param);
     int32_t getAndsetPersistentParameter(bool flag);
     void disconnectFeandBe(std::vector<int> pcmDevIds, std::string backEndName);
 

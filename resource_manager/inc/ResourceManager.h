@@ -695,8 +695,6 @@ public:
     /* Variable to store the mode request for Speaker protection */
     pal_spkr_prot_payload mSpkrProtModeValue;
 
-    /* Variable to store the mode request for Haptics Device */
-    pal_haptics_payload mHapticsModeValue;
     /* Variable to store the device orientation for Speaker*/
     int mOrientation = 0;
     pal_global_callback globalCb = NULL;
