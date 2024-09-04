@@ -1478,8 +1478,10 @@ void ResourceManager::ssrHandlingLoop(std::shared_ptr<ResourceManager> rm)
                     mActiveStreamMutex.lock();
                 }
 
+                mResourceManagerMutex.lock();
                 SoundTriggerCaptureProfile = GetCaptureProfileByPriority(nullptr, "va_macro");
                 TXMacroCaptureProfile = GetCaptureProfileByPriority(nullptr, "tx_macro");
+                mResourceManagerMutex.unlock();
                 for (auto str: rm->mActiveStreams) {
                     ret = increaseStreamUserCounter(str);
                     if (0 != ret) {
@@ -1654,9 +1656,9 @@ int ResourceManager::init_audio()
     PAL_INFO(LOG_TAG, "audio route %pK, mixer path %s", audio_route, mixer_xml_file);
     if (!audio_route) {
         PAL_ERR(LOG_TAG, "audio route init failed trying with mixer without variant name");
-	audio_route = audio_route_init(snd_hw_card, mixer_xml_file_wo_variant);
+    audio_route = audio_route_init(snd_hw_card, mixer_xml_file_wo_variant);
         PAL_INFO(LOG_TAG, "audio route %pK, mixer path %s", audio_route, mixer_xml_file_wo_variant);
-	if (!audio_route) {
+    if (!audio_route) {
             PAL_ERR(LOG_TAG, "audio route init failed ");
             mixer_close(audio_virt_mixer);
             mixer_close(audio_hw_mixer);
@@ -5001,6 +5003,7 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
         PAL_ERR(LOG_TAG, "Error:%d Invalid stream type", -EINVAL);
         return false;
     }
+    mResourceManagerMutex.lock();
     // backend config update
     if (is_active) {
         if (sAttr.type == PAL_STREAM_VOICE_UI)
@@ -5014,6 +5017,7 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
 
         if (!cap_prof) {
             PAL_ERR(LOG_TAG, "Failed to get capture profile");
+            mResourceManagerMutex.unlock();
             return false;
         }
 
@@ -5051,6 +5055,7 @@ bool ResourceManager::UpdateSoundTriggerCaptureProfile(Stream *s, bool is_active
                 backend_update = true;
         }
     }
+    mResourceManagerMutex.unlock();
 
     return backend_update;
 }
@@ -5575,6 +5580,7 @@ void ResourceManager::handleConcurrentStreamSwitch(std::vector<pal_stream_type_t
 
     // update common capture profile after use_lpi_ updated for all streams
     if (st_streams.size()) {
+        mResourceManagerMutex.lock();
         /* Updating SoundTriggerCaptureProfile for streams use VA Macro capture profiles */
         SoundTriggerCaptureProfile = nullptr;
         cap_prof_priority = GetCaptureProfileByPriority(nullptr, "va_macro");
@@ -5596,6 +5602,7 @@ void ResourceManager::handleConcurrentStreamSwitch(std::vector<pal_stream_type_t
                 CAPTURE_PROFILE_PRIORITY_HIGH) {
             TXMacroCaptureProfile = cap_prof_priority;
         }
+        mResourceManagerMutex.unlock();
     }
 
     for (pal_stream_type_t st_stream_type_to_stop : st_streams) {
@@ -10643,6 +10650,7 @@ int ResourceManager::getParameter(uint32_t param_id, void **param_payload,
             *payload_size = sizeof(pal_st_properties);
             break;
         }
+        break;
         case PAL_PARAM_ID_SP_MODE:
         {
             PAL_VERBOSE(LOG_TAG, "get parameter for FTM mode");
@@ -10725,6 +10733,25 @@ int ResourceManager::getParameter(uint32_t param_id, void **param_payload,
                                                 captureHandle, stCaptureInfo->pal_handle);
             } else {
                 PAL_ERR(LOG_TAG, "capture handle not found %d", captureHandle);
+            }
+        }
+        break;
+        case PAL_PARAM_ID_HAPTICS_MODE:
+        {
+            PAL_VERBOSE(LOG_TAG, "get parameter for FTM mode");
+            std::shared_ptr<Device> dev = nullptr;
+            struct pal_device dattr;
+            dattr.id = PAL_DEVICE_OUT_HAPTICS_DEVICE;
+            dev = Device::getInstance(&dattr , rm);
+            if (dev) {
+                status = dev->getParameter(PAL_PARAM_ID_HAPTICS_MODE,
+                                    param_payload);
+                if (status > 0) {
+                    *payload_size = status;
+                    status = 0;
+                } else {
+                    *payload_size = 0;
+                }
             }
         }
         break;
@@ -10837,6 +10864,47 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                       sizeof(pal_param_device_rotation_t), payload_size);
                 status = -EINVAL;
                 goto exit;
+            }
+        }
+        break;
+        case PAL_PARAM_ID_HAPTICS_MODE:
+        {
+            pal_haptics_payload *hapModeVal = 
+                (pal_haptics_payload *) param_payload;
+
+            if (payload_size == sizeof(pal_haptics_payload)) {
+                switch(hapModeVal->operationMode) {
+                    case PAL_HAP_MODE_FACTORY_TEST:
+                    case PAL_HAP_MODE_DYNAMIC_CAL:
+                    {
+                        struct pal_device dattr;
+                        dattr.id = PAL_DEVICE_OUT_HAPTICS_DEVICE;
+                        std::shared_ptr<Device> dev = nullptr;
+
+                        memset (&mHapticsModeValue, 0,
+                                        sizeof(pal_haptics_payload));
+                        mHapticsModeValue.operationMode =
+                                hapModeVal->operationMode;
+
+                        dev = Device::getInstance(&dattr , rm);
+                        if (dev) {
+                            PAL_DBG(LOG_TAG, "Got Haptics Device Instance, mode:%d",
+                                                          hapModeVal->operationMode);
+                            dev->setParameter(hapModeVal->operationMode, nullptr);
+                        }
+                        else {
+                            PAL_DBG(LOG_TAG, "Unable to get haptics device instance");
+                        }
+                    }
+                    break;
+                    default:
+                    {
+                        PAL_ERR(LOG_TAG, "unsupported hap op mode",
+                                hapModeVal->operationMode);
+                        status = -EINVAL;
+                        goto exit;
+                    }
+                }
             }
         }
         break;

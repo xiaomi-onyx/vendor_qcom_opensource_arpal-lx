@@ -4382,7 +4382,6 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
             {
                 param_id_haptics_vi_op_mode_param_t  *HpConf;
                 param_id_haptics_vi_op_mode_param_t  *data;
-                uint32_t *channelMap;
 
                 data = (param_id_haptics_vi_op_mode_param_t *) param;
 
@@ -4398,7 +4397,7 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
                 header = (struct apm_module_param_data_t*) payloadInfo;
 
                 HpConf = (param_id_haptics_vi_op_mode_param_t *) (payloadInfo +
-                                sizeof(struct param_id_haptics_vi_op_mode_param_t));
+                                sizeof(struct apm_module_param_data_t));
                 HpConf->th_operation_mode = data->th_operation_mode;
             }
         break;
@@ -4758,6 +4757,28 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
                     hpconf->channel_mask = 1;
                     hpwaveConf[0].wave_design_mode = hap_info->getRingtoneHapticsEffectConfiguration();
                     PAL_ERR(LOG_TAG, "ringtone haptics mode %d", hpwaveConf[0].wave_design_mode);
+                } else if(data->mode == PAL_STREAM_HAPTICS_PCM) {
+                    payloadSize = sizeof(struct apm_module_param_data_t) +
+                                   sizeof(param_id_haptics_wave_designer_config_t) +
+                                   (sizeof(rx_wave_designer_config_h));
+                    padBytes = PAL_PADDING_8BYTE_ALIGN(payloadSize);
+                    payloadInfo = (uint8_t*) calloc(1, payloadSize + padBytes);
+                    if (!payloadInfo) {
+                        PAL_ERR(LOG_TAG, "payloadInfo malloc failed %s", strerror(errno));
+                        return;
+                    }
+                    header = (struct apm_module_param_data_t *) payloadInfo;
+                    hpconf = (param_id_haptics_wave_designer_config_t *) (payloadInfo +
+                                sizeof(struct apm_module_param_data_t));
+                    hpwaveConf = (rx_wave_designer_config_h *) (payloadInfo +
+                                sizeof(struct apm_module_param_data_t)
+                                + sizeof(param_id_haptics_wave_designer_config_t));
+                    hpconf->num_channels = 1;
+                    hpconf->channel_mask = 1;
+                    hpwaveConf[0].wave_design_mode = 5;
+                    hpwaveConf[0].repetition_count = 1;
+                    hpwaveConf[0].num_pwl=0;
+                    PAL_ERR(LOG_TAG, "PCM haptics mode %d", hpwaveConf[0].wave_design_mode);
                 }
             }
             break;
@@ -4822,6 +4843,34 @@ void PayloadBuilder::payloadHapticsDevPConfig(uint8_t** payload, size_t* size, u
                               hpConf->channel_mask);
 
                  free(HConfig);
+            }
+            break;
+            case PARAM_ID_HAPTICS_RX_PCMV_PLAYBACK:
+            {
+                pal_param_haptics_cnfg_t *data;
+                param_id_haptics_rx_pcmv_playback *hpconf = nullptr;
+                uint8_t *buf_ptr = nullptr;
+
+                data = (pal_param_haptics_cnfg_t *)param;
+
+                payloadSize = sizeof(struct apm_module_param_data_t) +
+                                    sizeof(param_id_haptics_rx_pcmv_playback) +
+                                    data->buffer_size;
+                padBytes = PAL_PADDING_8BYTE_ALIGN(payloadSize);
+                payloadInfo = (uint8_t*) calloc(1, payloadSize + padBytes);
+                if (!payloadInfo) {
+                    PAL_ERR(LOG_TAG, "payloadInfo malloc failed %s", strerror(errno));
+                    return;
+                }
+                header = (struct apm_module_param_data_t*) payloadInfo;
+                hpconf = (param_id_haptics_rx_pcmv_playback *) (payloadInfo +
+                                sizeof(struct apm_module_param_data_t));
+                buf_ptr = (uint8_t*) (payloadInfo +
+                            sizeof(struct apm_module_param_data_t) +
+                            sizeof(struct param_id_haptics_rx_pcmv_playback));
+                hpconf->channel_mask = 1;
+                hpconf->buffer_size = data->buffer_size;
+                memcpy(buf_ptr, data->buffer_ptr, hpconf->buffer_size);
             }
             break;
         default:
