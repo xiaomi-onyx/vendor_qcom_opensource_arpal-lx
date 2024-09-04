@@ -1123,6 +1123,7 @@ public:
     int32_t pauseInCallMusic();
     void RegisterSTCaptureHandle(pal_param_st_capture_info_t stCaptureInfo, bool start);
     static void setProxyRecordActive(bool isActive);
+    void reconfigureScoStreams();
 };
 
 #endif
