@@ -3300,7 +3300,7 @@ int SessionAlsaPcm::setParameters(Stream *streamHandle, int tagId, uint32_t para
             }
 
             if (vdata->no_of_volpair > 1 && sAttr.out_media_config.ch_info.channels > 1) {
-                builder->payloadMultichVolumemConfig(&paramData, &paramSize, miid, vdata);
+                builder->payloadMultichVolumeConfig(&paramData, &paramSize, miid, vdata);
             } else {
                 builder->payloadVolumeConfig(&paramData, &paramSize, miid, vdata);
             }
