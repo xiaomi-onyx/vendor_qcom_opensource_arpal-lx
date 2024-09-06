@@ -228,6 +228,10 @@ closeDevice:
 exit:
     palStateEnqueue(this, PAL_STATE_OPENED, status);
     mStreamMutex.unlock();
+    if (status && mStreamAttr->direction == PAL_AUDIO_OUTPUT) {
+        PAL_ERR(LOG_TAG, "Stream open failed, sending error callback");
+        handleSessionCallBack((uint64_t)this, PAL_STREAM_CBK_EVENT_ERROR, (void*)NULL, 0);
+    }
     PAL_DBG(LOG_TAG,"Exit status: %d", status);
     return status;
 }
@@ -577,6 +581,10 @@ exit:
     palStateEnqueue(this, PAL_STATE_STARTED, status);
     PAL_DBG(LOG_TAG,"Exit status: %d", status);
     mStreamMutex.unlock();
+    if (status && mStreamAttr->direction == PAL_AUDIO_OUTPUT) {
+        PAL_ERR(LOG_TAG, "Stream start failed, sending error callback");
+        handleSessionCallBack((uint64_t)this, PAL_STREAM_CBK_EVENT_ERROR, (void*)NULL, 0);
+    }
     return status;
 }
 
