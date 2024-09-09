@@ -713,8 +713,12 @@ public:
     static bool isHapticsthroughWSA;
     /* Variable to store max volume index for voice call */
     static int max_voice_vol;
-    /* Variable to store if Silence Detection is enabled */
-    static bool isSilenceDetectionEnabled;
+    /*Silence Detection Enable flag for PCM session*/
+    static bool isSilenceDetectionEnabledPcm;
+    /*Silence Detection Enable flag for Voice session*/
+    static bool isSilenceDetectionEnabledVoice;
+    /*Silence Detection Duration Configuration*/
+    static uint32_t silenceDetectionDuration;
     /*variable to store MSPP linear gain*/
     pal_param_mspp_linear_gain_t linear_gain;
 #ifdef SOC_PERIPHERAL_PROT
@@ -1000,6 +1004,7 @@ public:
     static void processCardInfo(struct xml_userdata *data, const XML_Char *tag_name);
     static void processSpkrTempCtrls(const XML_Char **attr);
     static void processBTCodecInfo(const XML_Char **attr, const int attr_count);
+    static void processSilenceDetectionConfig(const XML_Char **attr);
     static void processPerfLockConfig(const XML_Char **attr);
     static void startTag(void *userdata __unused, const XML_Char *tag_name, const XML_Char **attr);
     static void snd_data_handler(void *userdata, const XML_Char *s, int len);
