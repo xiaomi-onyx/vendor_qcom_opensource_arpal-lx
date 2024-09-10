@@ -234,6 +234,7 @@ std::vector<std::pair<int32_t, std::string>> ResourceManager::deviceLinkName {
     {PAL_DEVICE_OUT_ULTRASOUND,           {std::string{ "" }}},
     {PAL_DEVICE_OUT_ULTRASOUND_DEDICATED, {std::string{ "" }}},
     {PAL_DEVICE_OUT_DUMMY,                {std::string{ "" }}},
+    {PAL_DEVICE_OUT_BLUETOOTH_HFP,        {std::string{ "" }}},
     {PAL_DEVICE_OUT_MAX,                  {std::string{ "none" }}},
 
     {PAL_DEVICE_IN_HANDSET_MIC,           {std::string{ "tdm-pri" }}},
@@ -263,6 +264,7 @@ std::vector<std::pair<int32_t, std::string>> ResourceManager::deviceLinkName {
     {PAL_DEVICE_IN_DUMMY,                 {std::string{ "" }}},
     {PAL_DEVICE_IN_CPS2_FEEDBACK,         {std::string{ "" }}},
     {PAL_DEVICE_IN_RECORD_PROXY,          {std::string{ "" }}},
+    {PAL_DEVICE_IN_BLUETOOTH_HFP,         {std::string{ "" }}},
     {PAL_DEVICE_IN_MAX,                   {std::string{ "" }}},
 };
 
@@ -293,6 +295,7 @@ std::vector<std::pair<int32_t, int32_t>> ResourceManager::devicePcmId {
     {PAL_DEVICE_OUT_ULTRASOUND,           1},
     {PAL_DEVICE_OUT_ULTRASOUND_DEDICATED, 1},
     {PAL_DEVICE_OUT_DUMMY,                0},
+    {PAL_DEVICE_OUT_BLUETOOTH_HFP,        0},
     {PAL_DEVICE_OUT_MAX,                  0},
 
     {PAL_DEVICE_IN_HANDSET_MIC,           0},
@@ -322,6 +325,7 @@ std::vector<std::pair<int32_t, int32_t>> ResourceManager::devicePcmId {
     {PAL_DEVICE_IN_DUMMY,                 0},
     {PAL_DEVICE_IN_CPS2_FEEDBACK,         0},
     {PAL_DEVICE_IN_RECORD_PROXY,          0},
+    {PAL_DEVICE_IN_BLUETOOTH_HFP,         0},
     {PAL_DEVICE_IN_MAX,                   0},
 };
 
@@ -353,6 +357,7 @@ std::vector<std::pair<int32_t, std::string>> ResourceManager::sndDeviceNameLUT {
     {PAL_DEVICE_OUT_ULTRASOUND,           {std::string{ "" }}},
     {PAL_DEVICE_OUT_ULTRASOUND_DEDICATED, {std::string{ "" }}},
     {PAL_DEVICE_OUT_DUMMY,                {std::string{ "" }}},
+    {PAL_DEVICE_OUT_BLUETOOTH_HFP,        {std::string{ "" }}},
     {PAL_DEVICE_OUT_MAX,                  {std::string{ "" }}},
 
     {PAL_DEVICE_IN_HANDSET_MIC,           {std::string{ "" }}},
@@ -382,6 +387,7 @@ std::vector<std::pair<int32_t, std::string>> ResourceManager::sndDeviceNameLUT {
     {PAL_DEVICE_IN_DUMMY,                 {std::string{ "" }}},
     {PAL_DEVICE_IN_CPS2_FEEDBACK,         {std::string{ "" }}},
     {PAL_DEVICE_IN_RECORD_PROXY,          {std::string{ "" }}},
+    {PAL_DEVICE_IN_BLUETOOTH_HFP,         {std::string{ "" }}},
     {PAL_DEVICE_IN_MAX,                   {std::string{ "" }}},
 };
 
@@ -658,6 +664,7 @@ std::vector<std::pair<int32_t, std::string>> ResourceManager::listAllBackEndIds 
     {PAL_DEVICE_OUT_ULTRASOUND,           {std::string{ "" }}},
     {PAL_DEVICE_OUT_ULTRASOUND_DEDICATED, {std::string{ "" }}},
     {PAL_DEVICE_OUT_DUMMY,                {std::string{ "" }}},
+    {PAL_DEVICE_OUT_BLUETOOTH_HFP,        {std::string{ "" }}},
     {PAL_DEVICE_OUT_MAX,                  {std::string{ "" }}},
 
     {PAL_DEVICE_IN_HANDSET_MIC,           {std::string{ "none" }}},
@@ -685,6 +692,7 @@ std::vector<std::pair<int32_t, std::string>> ResourceManager::listAllBackEndIds 
     {PAL_DEVICE_IN_BLUETOOTH_BLE,         {std::string{ "" }}},
     {PAL_DEVICE_IN_CPS_FEEDBACK,          {std::string{ "" }}},
     {PAL_DEVICE_IN_DUMMY,                 {std::string{ "" }}},
+    {PAL_DEVICE_IN_BLUETOOTH_HFP,         {std::string{ "" }}},
     {PAL_DEVICE_IN_CPS2_FEEDBACK,         {std::string{ "" }}},
     {PAL_DEVICE_IN_RECORD_PROXY,          {std::string{ "" }}},
     {PAL_DEVICE_IN_MAX,                   {std::string{ "" }}},
@@ -2890,6 +2898,21 @@ int32_t ResourceManager::getDeviceConfig(struct pal_device *deviceattr,
                 // update device sample rate based on sco mode
                 scoDev->updateSampleRate(&deviceattr->config.sample_rate);
                 PAL_DBG(LOG_TAG, "BT SCO device samplerate %d, bitwidth %d",
+                      deviceattr->config.sample_rate, deviceattr->config.bit_width);
+            }
+            break;
+        case PAL_DEVICE_OUT_BLUETOOTH_HFP:
+        case PAL_DEVICE_IN_BLUETOOTH_HFP:
+            {
+                std::shared_ptr<BtSco> hfpDev;
+                hfpDev = std::dynamic_pointer_cast<BtSco>(BtSco::getInstance(deviceattr, rm));
+                if (!hfpDev) {
+                    PAL_ERR(LOG_TAG, "failed to get BtSco singleton object.");
+                    return -EINVAL;
+                }
+                // update device sample rate based on sco mode
+                hfpDev->updateSampleRate(&deviceattr->config.sample_rate);
+                PAL_DBG(LOG_TAG, "BT HFP device samplerate %d, bitwidth %d",
                       deviceattr->config.sample_rate, deviceattr->config.bit_width);
             }
             break;
@@ -9158,7 +9181,6 @@ void ResourceManager::setDummyDevEnableParam(struct str_parms *parms, char *valu
     }
 }
 
-
 int ResourceManager::setDualMonoEnableParam(struct str_parms *parms,
                                  char *value, int len)
 {
@@ -11104,39 +11126,51 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
             struct pal_device dattr;
             pal_param_btsco_t* param_bt_sco = nullptr;
             bool isScoOn = false;
+            std::vector<pal_device_id_t> scoDev;
+            std::vector<pal_device_id_t> hfpDev;
 
-            dattr.id = PAL_DEVICE_OUT_BLUETOOTH_SCO;
-            if (!isDeviceAvailable(dattr.id)) {
-                dattr.id = PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET;
-                if (!isDeviceAvailable(dattr.id)) {
-                    PAL_INFO(LOG_TAG, "SCO output and input devices are all unavailable");
+            scoDev.push_back(PAL_DEVICE_OUT_BLUETOOTH_SCO);
+            scoDev.push_back(PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET);
+            // 1. set SCO on for SCO devices if they are available.
+            param_bt_sco = (pal_param_btsco_t*)param_payload;
+            for (auto devId: scoDev) {
+                dattr.id = devId;
+                dev = std::dynamic_pointer_cast<BtSco>
+                      (BtSco::getInstance(&dattr, rm));
+                if (!dev) {
+                    PAL_ERR(LOG_TAG, "Device getInstance failed");
+                    status = -ENODEV;
+                    goto exit;
+                }
+                isScoOn = dev->isDeviceReady();
+                if (isScoOn != param_bt_sco->bt_sco_on) {
+                    status = dev->setDeviceParameter(param_id, param_payload);
+                    if (status)
+                        PAL_ERR(LOG_TAG, "set Parameter %d failed on SCO devices", param_id);
+                } else {
+                    PAL_INFO(LOG_TAG, "SCO already in requested state, ignoring");
                 }
             }
-
-            dev = Device::getInstance(&dattr, rm);
-            if (!dev) {
-                PAL_ERR(LOG_TAG, "Device getInstance failed");
-                status = -ENODEV;
-                goto exit;
-            }
-
-            isScoOn = dev->isDeviceReady();
-            param_bt_sco = (pal_param_btsco_t*)param_payload;
-            if (isScoOn == param_bt_sco->bt_sco_on) {
-                PAL_INFO(LOG_TAG, "SCO already in requested state, ignoring");
-                goto exit;
-            }
-
-            status = dev->setDeviceParameter(param_id, param_payload);
-            if (status) {
-                PAL_ERR(LOG_TAG, "set Parameter %d failed\n", param_id);
-                goto exit;
-            }
-
             if (param_bt_sco->bt_sco_on) {
                 mResourceManagerMutex.unlock();
                 reconfigureScoStreams();
                 mResourceManagerMutex.lock();
+            }
+            // 2.set SCO on/HFP on for HFP devices if they are available as well.
+            hfpDev.push_back(PAL_DEVICE_OUT_BLUETOOTH_HFP);
+            hfpDev.push_back(PAL_DEVICE_IN_BLUETOOTH_HFP);
+            for (auto devId: hfpDev) {
+                dattr.id = devId;
+                dev = std::dynamic_pointer_cast<BtSco>
+                      (BtSco::getInstance(&dattr, rm));
+                if (!dev) {
+                    PAL_ERR(LOG_TAG, "Device getInstance failed");
+                    status = -ENODEV;
+                    goto exit;
+                }
+                status = dev->setDeviceParameter(param_id, param_payload);
+                if (status)
+                    PAL_ERR(LOG_TAG, "set Parameter %d failed on HFP devices", param_id);
             }
         }
         break;
@@ -11147,9 +11181,11 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
         {
             std::shared_ptr<Device> dev = nullptr;
             std::vector<pal_device_id_t> scoDev;
+            struct pal_device dattr;
+
             scoDev.push_back(PAL_DEVICE_OUT_BLUETOOTH_SCO);
             scoDev.push_back(PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET);
-            struct pal_device dattr;
+
             mResourceManagerMutex.unlock();
             for (auto devId: scoDev) {
                 dattr.id = devId;
@@ -11158,6 +11194,22 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                     status = dev->setDeviceParameter(param_id, param_payload);
             }
             mResourceManagerMutex.lock();
+            if (isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_HFP)) {
+                dattr.id = PAL_DEVICE_OUT_BLUETOOTH_HFP;
+                dev = std::dynamic_pointer_cast<BtSco>
+                      (BtSco::getInstance(&dattr, rm));
+                if (dev) {
+                    status = dev->setDeviceParameter(param_id, param_payload);
+                }
+            }
+            if (isDeviceAvailable(PAL_DEVICE_IN_BLUETOOTH_HFP)) {
+                dattr.id = PAL_DEVICE_IN_BLUETOOTH_HFP;
+                dev = std::dynamic_pointer_cast<BtSco>
+                      (BtSco::getInstance(&dattr, rm));
+                if (dev) {
+                    status = dev->setDeviceParameter(param_id, param_payload);
+                }
+            }
         }
         break;
         case PAL_PARAM_ID_BT_A2DP_RECONFIG:
@@ -12697,7 +12749,9 @@ bool ResourceManager::isBtA2dpDevice(pal_device_id_t id)
 bool ResourceManager::isBtScoDevice(pal_device_id_t id)
 {
     if (id == PAL_DEVICE_OUT_BLUETOOTH_SCO ||
-        id == PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET)
+        id == PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET ||
+        id == PAL_DEVICE_IN_BLUETOOTH_HFP ||
+        id == PAL_DEVICE_OUT_BLUETOOTH_HFP)
         return true;
     else
         return false;

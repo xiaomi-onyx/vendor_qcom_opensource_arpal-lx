@@ -1023,7 +1023,7 @@ public:
     static int setHapticsPriorityParam(struct str_parms *parms,char *value, int len);
     static int setHapticsDrivenParam(struct str_parms *parms,char *value, int len);
     static void setConnectivityProxyEnableParam(struct str_parms *parms,char *value, int len);
-    static void setDummyDevEnableParam(struct str_parms *parms,char *value, int len);
+    static void setDummyDevEnableParam(struct str_parms *parms, char *value, int len);
     static bool isLpiLoggingEnabled();
     static void processConfigParams(const XML_Char **attr);
     static bool isValidDevId(int deviceId);

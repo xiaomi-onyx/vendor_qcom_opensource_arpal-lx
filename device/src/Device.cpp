@@ -146,6 +146,8 @@ std::shared_ptr<Device> Device::getInstance(struct pal_device *device,
         return HandsetVaMic::getInstance(device, Rm);
     case PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET:
     case PAL_DEVICE_OUT_BLUETOOTH_SCO:
+    case PAL_DEVICE_IN_BLUETOOTH_HFP:
+    case PAL_DEVICE_OUT_BLUETOOTH_HFP:
         PAL_VERBOSE(LOG_TAG, "BTSCO device");
         return BtSco::getInstance(device, Rm);
     case PAL_DEVICE_IN_BLUETOOTH_A2DP:
@@ -257,6 +259,8 @@ std::shared_ptr<Device> Device::getObject(pal_device_id_t dev_id)
         return BtA2dp::getObject(dev_id);
     case PAL_DEVICE_OUT_BLUETOOTH_SCO:
     case PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET:
+    case PAL_DEVICE_IN_BLUETOOTH_HFP:
+    case PAL_DEVICE_OUT_BLUETOOTH_HFP:
         PAL_VERBOSE(LOG_TAG, "BT SCO device %d", dev_id);
         return BtSco::getObject(dev_id);
     case PAL_DEVICE_OUT_PROXY:

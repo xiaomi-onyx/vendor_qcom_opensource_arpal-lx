@@ -295,8 +295,11 @@ class BtSco : public Bluetooth
 protected:
     static std::shared_ptr<Device> objRx;
     static std::shared_ptr<Device> objTx;
+    static std::shared_ptr<Device> objHfpRx;
+    static std::shared_ptr<Device> objHfpTx;
     BtSco(struct pal_device *device, std::shared_ptr<ResourceManager> Rm);
-    static bool isScoOn;
+    bool isScoOn = false;
+    bool isHfpOn = false;
     static bool isWbSpeechEnabled;
     static int  swbSpeechMode;
     static bool isSwbLc3Enabled;
@@ -312,6 +315,7 @@ public:
     void convertCodecInfo(audio_lc3_codec_cfg_t &lc3CodecInfo, btsco_lc3_cfg_t &lc3Cfg);
     void updateSampleRate(uint32_t *sampleRate);
     bool isScoNbWbActive() override;
+    bool isHFPRunning();
     static std::shared_ptr<Device> getObject(pal_device_id_t id);
     static std::shared_ptr<Device> getInstance(struct pal_device *device,
                                                std::shared_ptr<ResourceManager> Rm);
