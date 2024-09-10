@@ -144,6 +144,7 @@ struct timespec HapticsDevProtection::devLastTimeUsed;
 struct mixer *HapticsDevProtection::virtMixer;
 struct mixer *HapticsDevProtection::hwMixer;
 haptics_dev_prot_cal_state HapticsDevProtection::hapticsDevCalState;
+haptics_dev_prot_proc_state HapticsDevProtection::hapticsDevProcessingState;
 haptics_vi_cal_param HapticsDevProtection::cbCalData[HAPTICS_MAX_OUT_CHAN];
 struct pcm * HapticsDevProtection::rxPcm = NULL;
 struct pcm * HapticsDevProtection::txPcm = NULL;
@@ -376,6 +377,11 @@ int HapticsDevProtection::HapticsDevStartCalibration(int32_t operation_mode)
     calVector.clear();
 
     PAL_DBG(LOG_TAG, "Enter");
+
+    if (hapticsDevProcessingState != HAPTICS_DEV_PROCESSING_IN_IDLE) {
+        PAL_ERR(LOG_TAG, "HapticsDev is already in processing mode, skipping CALIBRATION OR FTM");
+        goto SkipCalib;
+    }
 
     if (customPayloadSize) {
         free(customPayload);
@@ -887,6 +893,8 @@ exit:
         cv.notify_all();
     }
 
+SkipCalib:
+
     if (ret != 0) {
         // Error happened. Reset timer
         clock_gettime(CLOCK_BOOTTIME, &devLastTimeUsed);
@@ -1116,6 +1124,9 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
             rxPcm = nullptr;
             PAL_DBG(LOG_TAG, "Stopped calibration mode");
         }
+
+        hapticsDevProcessingState = HAPTICS_DEV_PROCESSING_IN_PROGRESS;
+
         numberOfRequest++;
         if (numberOfRequest > 1) {
             // R0T0 already set, we don't need to process the request.
@@ -1448,6 +1459,8 @@ free_fe:
         pcmDevIdTx.clear();
     }
 exit:
+    if (!flag)
+        hapticsDevProcessingState = HAPTICS_DEV_PROCESSING_IN_IDLE;
     deviceMutex.unlock();
     if(builder) {
        delete builder;

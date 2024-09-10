@@ -81,7 +81,7 @@ protected :
     bool triggerCal;
     int minIdleTime;
     static haptics_dev_prot_cal_state hapticsDevCalState;
-    haptics_dev_prot_proc_state hapticsDevProcessingState;
+    static haptics_dev_prot_proc_state hapticsDevProcessingState;
     int *devTempList;
     static bool isHapDevInUse;
     static std::atomic<bool> calThrdCreated;
