@@ -76,7 +76,6 @@ struct haptics_vi_cal_param {
 class HapticsDevProtection : public HapticsDev
 {
 protected :
-    bool hapticsdevProtEnable;
     bool threadExit;
     bool triggerCal;
     int minIdleTime;
