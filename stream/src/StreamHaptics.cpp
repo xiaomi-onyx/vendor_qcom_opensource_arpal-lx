@@ -41,6 +41,7 @@
 #include "Device.h"
 #include <unistd.h>
 #include "rx_haptics_api.h"
+#include "wsa_haptics_vi_api.h"
 
 StreamHaptics::StreamHaptics(const struct pal_stream_attributes *sattr, struct pal_device *dattr __unused,
                     const uint32_t no_of_devices __unused, const struct modifier_kv *modifiers __unused,
@@ -112,6 +113,13 @@ int32_t  StreamHaptics::setParameters(uint32_t param_id, void *payload)
             status = session->setParameters(NULL, 0, param_id, payload);
             if (status)
                 PAL_ERR(LOG_TAG, "Error:%d, Failed to setParam", status);
+            break;
+        }
+        case PARAM_ID_HAPTICS_EX_VI_PERSISTENT:
+        {
+            status =  mDevices[0]->setParameter(param_id, nullptr);
+            if (status)
+               PAL_ERR(LOG_TAG, "Error:%d, Failed to setParam", status);
             break;
         }
         default:
