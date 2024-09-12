@@ -723,6 +723,11 @@ void SessionAlsaCompress::offloadThreadLoop(SessionAlsaCompress* compressObj)
                     event_id = PAL_STREAM_CBK_EVENT_WRITE_READY;
                     compressObj->command = OFFLOAD_CMD_EXIT;
                 }
+                if (ret && (errno == -ECANCELED || errno == -ENETRESET)) {
+                    PAL_INFO(LOG_TAG, "No need of sending callback during SSR or internal unblock");
+                    lock.lock();
+                    continue;
+                }
             } else if (msg && msg->cmd == OFFLOAD_CMD_DRAIN) {
                 if (!is_drain_called) {
                     PAL_INFO(LOG_TAG, "calling compress_drain");
@@ -732,8 +737,8 @@ void SessionAlsaCompress::offloadThreadLoop(SessionAlsaCompress* compressObj)
                          PAL_INFO(LOG_TAG, "out of compress_drain, ret %d", ret);
                     }
                 }
-                if (ret == -ENETRESET) {
-                    PAL_ERR(LOG_TAG, "Block drain ready event during SSR");
+                if (ret && (errno == -ECANCELED || errno == -ENETRESET)) {
+                    PAL_INFO(LOG_TAG, "No need of sending callback during SSR or internal unblock");
                     lock.lock();
                     continue;
                 }
@@ -759,8 +764,8 @@ void SessionAlsaCompress::offloadThreadLoop(SessionAlsaCompress* compressObj)
                         event_id = PAL_STREAM_CBK_EVENT_DRAIN_READY;
                     }
                 }
-                if (ret == -ENETRESET) {
-                    PAL_ERR(LOG_TAG, "Block drain ready event during SSR");
+                if (ret && (errno == -ECANCELED || errno == -ENETRESET)) {
+                    PAL_INFO(LOG_TAG, "No need of sending callback during SSR or internal unblock");
                     lock.lock();
                     continue;
                 }
