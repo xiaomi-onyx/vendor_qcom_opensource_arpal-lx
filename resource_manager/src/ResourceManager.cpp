@@ -9477,6 +9477,8 @@ int32_t ResourceManager::a2dpReconfig()
     std::vector <Stream*> activeStreams;
     std::vector <Stream*>::iterator sIter;
     struct pal_volume_data* volume = NULL;
+    std::vector <Stream*> orphanStreams;
+    std::vector <Stream*> retryStreams;
 
     PAL_DBG(LOG_TAG, "enter");
     volume = (struct pal_volume_data*)calloc(1, (sizeof(uint32_t) +
@@ -9490,6 +9492,7 @@ int32_t ResourceManager::a2dpReconfig()
 
     a2dpDattr.id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
     a2dpDev = Device::getInstance(&a2dpDattr, rm);
+
     if (!a2dpDev) {
         PAL_ERR(LOG_TAG, "Getting a2dp/ble device instance failed");
         mActiveStreamMutex.unlock();
@@ -9504,10 +9507,26 @@ int32_t ResourceManager::a2dpReconfig()
     }
 
     getActiveStream_l(activeA2dpStreams, a2dpDev);
-    if (activeA2dpStreams.size() == 0) {
-        PAL_DBG(LOG_TAG, "no active streams found on a2dp device");
-        mActiveStreamMutex.unlock();
-        goto exit;
+    getOrphanStream_l(orphanStreams, retryStreams);
+    if (activeA2dpStreams.size() == 0 || !orphanStreams.empty()) {
+        if (!orphanStreams.empty()) {
+            for (auto sIter = orphanStreams.begin(); sIter != orphanStreams.end(); sIter++) {
+                std::vector<std::shared_ptr<Device>> palDevices;
+                (*sIter)->getPalDevices(palDevices);
+                if (palDevices.size() == 1 &&
+                    isBtA2dpDevice((pal_device_id_t)palDevices[0]->getSndDeviceId())) {
+                    PAL_DBG(LOG_TAG, "found orphan stream which failed to switch to BT-a2dp.");
+                    activeA2dpStreams.push_back(*sIter);
+                }
+            }
+        } else {
+            PAL_DBG(LOG_TAG, "orphanStreams is empty.");
+        }
+        if (activeA2dpStreams.size() == 0) {
+            PAL_DBG(LOG_TAG, "no active streams needs to do reconfig, exit.");
+            mActiveStreamMutex.unlock();
+            goto exit;
+        }
     }
     for (sIter = activeA2dpStreams.begin(); sIter != activeA2dpStreams.end(); sIter++) {
         if (((*sIter) != NULL) && isStreamActive(*sIter, mActiveStreams)) {
@@ -9554,8 +9573,7 @@ int32_t ResourceManager::a2dpReconfig()
         usleep(maxLatencyMs * 1000 * latencyMuteFactor);
     }
 
-    forceDeviceSwitch(a2dpDev, &a2dpDattr);
-
+    forceDeviceSwitch(a2dpDev, &a2dpDattr, activeA2dpStreams);
     mActiveStreamMutex.lock();
     for (sIter = activeA2dpStreams.begin(); sIter != activeA2dpStreams.end(); sIter++) {
         if (((*sIter) != NULL) && isStreamActive(*sIter, mActiveStreams)) {
@@ -9569,8 +9587,9 @@ int32_t ResourceManager::a2dpReconfig()
                  * This is to avoid resuming during regular pause.
                  */
                 if (((*sIter)->a2dpPaused) == true) {
-                    (*sIter)->resume_l();
-                    (*sIter)->a2dpPaused = false;
+                    if (!(*sIter)->resume_l()) {
+                        (*sIter)->a2dpPaused = false;
+                    }
                 }
             }
             status = (*sIter)->getVolumeData(volume);
@@ -11306,13 +11325,6 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
                 if (a2dp_dev->checkDeviceStatus() == A2DP_STATE_DISCONNECTED) {
                     PAL_ERR(LOG_TAG, "failed to open A2dp source, skip a2dp reconfig.");
                     status = -ENODEV;
-                    goto exit;
-                }
-
-                getActiveStream_l(activeA2dpStreams, a2dp_dev);
-                if (activeA2dpStreams.size() == 0) {
-                    PAL_DBG(LOG_TAG, "no active a2dp stream available, skip a2dp reconfig.");
-                    status = 0;
                     goto exit;
                 }
 
