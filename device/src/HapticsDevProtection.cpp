@@ -1428,8 +1428,6 @@ int32_t HapticsDevProtection::HapticsDevProtProcessingMode(bool flag)
                 PAL_ERR(LOG_TAG, "Failed to obtain tx backend name for %d", device.id);
                 goto exit;
             }
-            //Get persistent param for future use.
-            getAndsetPersistentParameter(true);
 
             pcm_stop(txPcm);
             pcm_close(txPcm);
