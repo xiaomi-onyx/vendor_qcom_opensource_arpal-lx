@@ -1577,7 +1577,7 @@ set_mixer:
                 }
             }
 
-            if (ResourceManager::isSilenceDetectionEnabledPcm) {
+            if (ResourceManager::isSilenceDetectionEnabledPcm && sAttr.type != PAL_STREAM_VOICE_CALL_RECORD) {
                 status = s->getAssociatedDevices(associatedDevices);
                 if (0 != status) {
                     PAL_ERR(LOG_TAG,"getAssociatedDevices Failed for Silence Detection\n");
@@ -1616,7 +1616,7 @@ silence_det_setup_done:
                 if (status) {
                     status = errno;
                     PAL_ERR(LOG_TAG, "pcm_start failed %d", status);
-                    if (ResourceManager::isSilenceDetectionEnabledPcm)
+                    if (ResourceManager::isSilenceDetectionEnabledPcm && sAttr.type != PAL_STREAM_VOICE_CALL_RECORD)
                         (void) Session::disableSilenceDetection(rm, mixer, pcmDevIds, txAifBackEnds[0].second.data(), (uint64_t)this);
                     goto exit;
                 }
@@ -2174,7 +2174,7 @@ int SessionAlsaPcm::stop(Stream * s)
                     audio_route_reset_and_update_path(audioRoute, "lpi-pcm-logging");
             }
 
-            if (ResourceManager::isSilenceDetectionEnabledPcm) {
+            if (ResourceManager::isSilenceDetectionEnabledPcm && sAttr.type != PAL_STREAM_VOICE_CALL_RECORD) {
                 (void) Session::disableSilenceDetection(rm, mixer, pcmDevIds, txAifBackEnds[0].second.data(), (uint64_t)this);
             }
         break;
