@@ -476,16 +476,6 @@ std::shared_ptr<CaptureProfile> StreamSensorPCMData::GetCurrentCaptureProfile()
             channels = dev_config.config.ch_info.channels;
         }
 
-        cap_prof = rm->GetTXMacroCaptureProfile();
-        if (cap_prof) {
-            channels = (channels >= cap_prof->GetChannels()) ?
-                        channels : cap_prof->GetChannels();
-            sample_rate = (sample_rate >= cap_prof->GetSampleRate()) ?
-                           sample_rate : cap_prof->GetSampleRate();
-            bit_width = (bit_width >= cap_prof->GetBitWidth()) ?
-                           bit_width : cap_prof->GetBitWidth();
-        }
-
         if (channels == 1)
             capture_profile_name.append("SINGLE_MIC_");
         else if (channels == 2)

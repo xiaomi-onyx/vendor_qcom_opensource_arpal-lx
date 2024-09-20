@@ -573,6 +573,30 @@ int32_t Stream::getAssociatedDevices(std::vector <std::shared_ptr<Device>> &aDev
     return status;
 }
 
+int32_t Stream::getAssociatedOutDevices(std::vector <std::shared_ptr<Device>> &aDevices)
+{
+    int32_t status = 0;
+
+    for (int32_t i=0; i < mDevices.size(); i++) {
+        if (rm->isOutputDevId(mDevices[i]->getSndDeviceId()))
+            aDevices.push_back(mDevices[i]);
+    }
+
+    return status;
+}
+
+int32_t Stream::getAssociatedInDevices(std::vector <std::shared_ptr<Device>> &aDevices)
+{
+    int32_t status = 0;
+
+    for (int32_t i=0; i < mDevices.size(); i++) {
+        if (rm->isInputDevId(mDevices[i]->getSndDeviceId()))
+            aDevices.push_back(mDevices[i]);
+    }
+
+    return status;
+}
+
 int32_t Stream::getPalDevices(std::vector <std::shared_ptr<Device>> &PalDevices)
 {
     int32_t status = 0;
@@ -2068,10 +2092,11 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
 
         /* Add device associated with current stream to streamDevDisconnect/StreamDevConnect list */
         for (int j = 0; j < disconnectCount; j++) {
-            // check to make sure device direction is the same
+            // check to make sure device direction is the same.
             // for shared BE, new device on the slot may change in compareSharedBEStreamDevAttr()
+            // and do device switch if current device differs from new device.
             if (rm->matchDevDir(mDevices[curDeviceSlots[j]]->getSndDeviceId(), newDeviceId) &&
-                newDeviceId == newDevices[newDeviceSlots[i]].id) {
+                mDevices[curDeviceSlots[j]]->getSndDeviceId() != newDevices[newDeviceSlots[i]].id) {
                 streamDevDisconnect.push_back({streamHandle, mDevices[curDeviceSlots[j]]->getSndDeviceId()});
                 // if something disconnected incoming device and current dev diff so push on a switchwe need to add the deivce
                 matchFound = true;

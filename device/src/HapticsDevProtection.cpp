@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -137,7 +137,7 @@ std::mutex HapticsDevProtection::cvMutex;
 std::mutex HapticsDevProtection::calibrationMutex;
 
 bool HapticsDevProtection::isHapDevInUse;
-bool HapticsDevProtection::calThrdCreated;
+std::atomic<bool> HapticsDevProtection::calThrdCreated;
 std::atomic<bool> HapticsDevProtection::ftmThrdCreated;
 bool HapticsDevProtection::isDynamicCalTriggered = false;
 struct timespec HapticsDevProtection::devLastTimeUsed;
@@ -1000,7 +1000,7 @@ void HapticsDevProtection::HapticsDevCalibrationThread()
         }
     }
     isDynamicCalTriggered = false;
-    calThrdCreated = false;
+    calThrdCreated.store(false);
     PAL_DBG(LOG_TAG, "Calibration done, exiting the thread");
 }
 
@@ -1018,7 +1018,7 @@ HapticsDevProtection::HapticsDevProtection(struct pal_device *device,
     memcpy(&mDeviceAttr, device, sizeof(struct pal_device));
 
     threadExit = false;
-    calThrdCreated = false;
+    calThrdCreated.store(false);
     ftmThrdCreated.store(false);
 
     triggerCal = false;
@@ -1049,9 +1049,11 @@ HapticsDevProtection::HapticsDevProtection(struct pal_device *device,
 
     calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_INACTIVE;
     mDspCallbackRcvd = false;
-    mCalThread = std::thread(&HapticsDevProtection::HapticsDevCalibrationThread,
-                             this);
-    calThrdCreated = true;
+    if (!calThrdCreated.load()) {
+        mCalThread = std::thread(&HapticsDevProtection::HapticsDevCalibrationThread,
+                                 this);
+        calThrdCreated.store(true);
+    }
 }
 
 HapticsDevProtection::~HapticsDevProtection()
@@ -1576,9 +1578,9 @@ int HapticsDevProtection::HapticsDevProtectionDynamicCal()
 
     PAL_DBG(LOG_TAG, "Enter");
 
-    if (calThrdCreated) {
+    if (calThrdCreated.load()) {
         PAL_DBG(LOG_TAG, "Calibration already triggered Thread State %d",
-                        calThrdCreated);
+                        calThrdCreated.load());
         return ret;
     }
 
@@ -1588,7 +1590,7 @@ int HapticsDevProtection::HapticsDevProtectionDynamicCal()
     calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_INACTIVE;
     mDspCallbackRcvd = false;
 
-    calThrdCreated = true;
+    calThrdCreated.store(true);
     isDynamicCalTriggered = true;
 
     std::thread dynamicCalThread(&HapticsDevProtection::HapticsDevCalibrationThread, this);
@@ -1639,8 +1641,11 @@ int32_t HapticsDevProtection::setParameter(uint32_t param_id, void *param)
     if (param_id == PAL_HAP_MODE_FACTORY_TEST)
         HapticsDevProtectionFTM();
 
-    if (param_id == PAL_HAP_MODE_DYNAMIC_CAL)
+    else if (param_id == PAL_HAP_MODE_DYNAMIC_CAL)
         HapticsDevProtectionDynamicCal();
+
+    else if (param_id ==  PARAM_ID_HAPTICS_EX_VI_PERSISTENT)
+        getAndsetPersistentParameter(true);
 
     return 0;
 }

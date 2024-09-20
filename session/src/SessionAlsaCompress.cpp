@@ -395,7 +395,10 @@ void SessionAlsaCompress::updateCodecOptions(
         PAL_DBG(LOG_TAG, "capture compress format %x", audio_fmt);
         pal_snd_enc = (pal_snd_enc_t *)param_payload->payload;
         switch (audio_fmt) {
-            case PAL_AUDIO_FMT_AAC: {
+            case PAL_AUDIO_FMT_AAC:
+            case PAL_AUDIO_FMT_AAC_ADTS:
+            case PAL_AUDIO_FMT_AAC_ADIF:
+            case PAL_AUDIO_FMT_AAC_LATM: {
                 codec.format = pal_snd_enc->aac_enc.enc_cfg.aac_fmt_flag;
                 codec.profile = pal_snd_enc->aac_enc.enc_cfg.aac_enc_mode;
                 codec.bit_rate = pal_snd_enc->aac_enc.aac_bit_rate;
@@ -720,6 +723,11 @@ void SessionAlsaCompress::offloadThreadLoop(SessionAlsaCompress* compressObj)
                     event_id = PAL_STREAM_CBK_EVENT_WRITE_READY;
                     compressObj->command = OFFLOAD_CMD_EXIT;
                 }
+                if (ret && (errno == -ECANCELED || errno == -ENETRESET)) {
+                    PAL_INFO(LOG_TAG, "No need of sending callback during SSR or internal unblock");
+                    lock.lock();
+                    continue;
+                }
             } else if (msg && msg->cmd == OFFLOAD_CMD_DRAIN) {
                 if (!is_drain_called) {
                     PAL_INFO(LOG_TAG, "calling compress_drain");
@@ -729,8 +737,8 @@ void SessionAlsaCompress::offloadThreadLoop(SessionAlsaCompress* compressObj)
                          PAL_INFO(LOG_TAG, "out of compress_drain, ret %d", ret);
                     }
                 }
-                if (ret == -ENETRESET) {
-                    PAL_ERR(LOG_TAG, "Block drain ready event during SSR");
+                if (ret && (errno == -ECANCELED || errno == -ENETRESET)) {
+                    PAL_INFO(LOG_TAG, "No need of sending callback during SSR or internal unblock");
                     lock.lock();
                     continue;
                 }
@@ -756,8 +764,8 @@ void SessionAlsaCompress::offloadThreadLoop(SessionAlsaCompress* compressObj)
                         event_id = PAL_STREAM_CBK_EVENT_DRAIN_READY;
                     }
                 }
-                if (ret == -ENETRESET) {
-                    PAL_ERR(LOG_TAG, "Block drain ready event during SSR");
+                if (ret && (errno == -ECANCELED || errno == -ENETRESET)) {
+                    PAL_INFO(LOG_TAG, "No need of sending callback during SSR or internal unblock");
                     lock.lock();
                     continue;
                 }
