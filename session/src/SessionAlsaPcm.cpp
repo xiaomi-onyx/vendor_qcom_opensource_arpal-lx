@@ -2349,6 +2349,9 @@ int SessionAlsaPcm::stop(Stream * s)
         break;
         case PAL_AUDIO_OUTPUT:
             if (pcm && isActive()) {
+                // signal EOS for BT usecase to empty packets to avoid
+                // incomplete packets sent post graph stop
+                SessionAlsaUtils::signalBtEOS(s, pcmDevIds.at(0), rm);
                 status = pcm_stop(pcm);
                 if (status) {
                     status = errno;
