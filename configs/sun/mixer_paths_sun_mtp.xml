@@ -541,7 +541,7 @@
     </path>
 
     <path name="handset-mic">
-        <path name="dmic2" />
+        <path name="dmic3" />
         <ctl name="TX_DEC2 Volume" value="98" />
     </path>
 
