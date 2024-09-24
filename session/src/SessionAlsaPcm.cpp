@@ -1616,8 +1616,6 @@ silence_det_setup_done:
                 if (status) {
                     status = errno;
                     PAL_ERR(LOG_TAG, "pcm_start failed %d", status);
-                    if (ResourceManager::isSilenceDetectionEnabledPcm && sAttr.type != PAL_STREAM_VOICE_CALL_RECORD)
-                        (void) Session::disableSilenceDetection(rm, mixer, pcmDevIds, txAifBackEnds[0].second.data(), (uint64_t)this);
                     goto exit;
                 }
             }
@@ -2146,6 +2144,8 @@ int SessionAlsaPcm::stop(Stream * s)
 {
     int status = 0;
     struct pal_stream_attributes sAttr = {};
+    std::vector<std::shared_ptr<Device>> associatedDevices;
+    struct pal_device dAttr = {};
     struct agm_event_reg_cfg event_cfg;
     int payload_size = 0;
     int tagId;
@@ -2175,7 +2175,25 @@ int SessionAlsaPcm::stop(Stream * s)
             }
 
             if (ResourceManager::isSilenceDetectionEnabledPcm && sAttr.type != PAL_STREAM_VOICE_CALL_RECORD) {
-                (void) Session::disableSilenceDetection(rm, mixer, pcmDevIds, txAifBackEnds[0].second.data(), (uint64_t)this);
+                status = s->getAssociatedDevices(associatedDevices);
+                if (0 != status) {
+                    PAL_ERR(LOG_TAG, "getAssociatedDevices Failed for Silence Detection\n");
+                    goto silence_det_setup_done;
+                }
+
+                for (int i=0; i < associatedDevices.size(); i++) {
+                    status = associatedDevices[i]->getDeviceAttributes(&dAttr);
+                    if (0 != status) {
+                        PAL_ERR(LOG_TAG, "getDeviceAttributes failed for Silence Detection\n");
+                        goto silence_det_setup_done;
+                    }
+                }
+
+                if (dAttr.id == PAL_DEVICE_IN_HANDSET_MIC || dAttr.id == PAL_DEVICE_IN_SPEAKER_MIC) {
+                    (void) Session::disableSilenceDetection(rm, mixer, pcmDevIds, txAifBackEnds[0].second.data(), (uint64_t)this);
+                }
+silence_det_setup_done:
+                status = 0;
             }
         break;
         case PAL_AUDIO_OUTPUT:
