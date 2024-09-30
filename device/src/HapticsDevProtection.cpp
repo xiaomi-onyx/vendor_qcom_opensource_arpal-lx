@@ -143,7 +143,7 @@ bool HapticsDevProtection::isDynamicCalTriggered = false;
 struct timespec HapticsDevProtection::devLastTimeUsed;
 struct mixer *HapticsDevProtection::virtMixer;
 struct mixer *HapticsDevProtection::hwMixer;
-haptics_dev_prot_cal_state HapticsDevProtection::hapticsDevCalState;
+haptics_dev_prot_cal_state HapticsDevProtection::hapticsDevCalState = HAPTICS_DEV_NOT_CALIBRATED;
 haptics_dev_prot_proc_state HapticsDevProtection::hapticsDevProcessingState;
 haptics_vi_cal_param HapticsDevProtection::cbCalData[HAPTICS_MAX_OUT_CHAN];
 struct pcm * HapticsDevProtection::rxPcm = NULL;
@@ -1030,7 +1030,6 @@ HapticsDevProtection::HapticsDevProtection(struct pal_device *device,
     ftmThrdCreated.store(false);
 
     triggerCal = false;
-    hapticsDevCalState = HAPTICS_DEV_NOT_CALIBRATED;
     hapticsDevProcessingState = HAPTICS_DEV_PROCESSING_IN_IDLE;
 
     isHapDevInUse = false;
@@ -1057,13 +1056,20 @@ HapticsDevProtection::HapticsDevProtection(struct pal_device *device,
 
     calibrationCallbackStatus = HAPTICS_VI_CALIB_STATE_INACTIVE;
     mDspCallbackRcvd = false;
-    mCalThread = std::thread(&HapticsDevProtection::HapticsDevCalibrationThread,
+
+    if (hapticsDevCalState == HAPTICS_DEV_NOT_CALIBRATED) {
+        mCalThread = std::thread(&HapticsDevProtection::HapticsDevCalibrationThread,
                              this);
-    calThrdCreated = true;
+        calThrdCreated = true;
+    }
 }
 
 HapticsDevProtection::~HapticsDevProtection()
 {
+    if (mCalThread.joinable()) {
+        mCalThread.join();
+        mCalThread = std::thread();
+    }
 }
 
 /*
