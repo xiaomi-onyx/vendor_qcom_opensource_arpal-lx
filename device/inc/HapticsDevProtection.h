@@ -83,7 +83,7 @@ protected :
     static haptics_dev_prot_proc_state hapticsDevProcessingState;
     int *devTempList;
     static bool isHapDevInUse;
-    static std::atomic<bool> calThrdCreated;
+    static bool calThrdCreated;
     static std::atomic<bool> ftmThrdCreated;
     static bool isDynamicCalTriggered;
     static struct timespec devLastTimeUsed;
