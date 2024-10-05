@@ -2312,7 +2312,7 @@ int SessionAlsaCompress::setParameters(Stream *s __unused, int tagId, uint32_t p
             }
 
             if (vdata->no_of_volpair > 1 && sAttr.out_media_config.ch_info.channels > 1) {
-                builder->payloadMultichVolumemConfig(&alsaParamData, &alsaPayloadSize, miid, vdata);
+                builder->payloadMultichVolumeConfig(&alsaParamData, &alsaPayloadSize, miid, vdata);
             } else {
                 builder->payloadVolumeConfig(&alsaParamData, &alsaPayloadSize, miid, vdata);
             }
