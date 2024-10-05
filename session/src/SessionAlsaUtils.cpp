@@ -2856,3 +2856,81 @@ int SessionAlsaUtils::flush(std::shared_ptr<ResourceManager> rmHandle, uint32_t 
 
     return status;
 }
+
+#define PARAM_ID_CONN_PROXY_EOS_SIGNAL 0x08001AE5
+#define CONN_PROXY_EOS_DELAY 10 * 1000
+int SessionAlsaUtils::signalBtEOS(Stream* s, int device, std::shared_ptr<ResourceManager> rmHandle)
+{
+    int status = 0;
+    uint32_t miid;
+    struct mixer *mixerHandle = nullptr;
+    struct pal_stream_attributes sAttr = {};
+    std::string backendname;
+    int32_t beDevId = 0;
+    std::vector<std::shared_ptr<Device>> associatedDevices;
+    struct apm_module_param_data_t* header = NULL;
+
+    if (!ResourceManager::isCPEnabled) {
+        PAL_DBG(LOG_TAG, "context proxy not enabled.");
+        return status;
+    }
+    status = rmHandle->getVirtualAudioMixer(&mixerHandle);
+    if (status) {
+        PAL_ERR(LOG_TAG, "Error: Failed to get mixer handle");
+        return status;
+    }
+
+    status = s->getStreamAttributes(&sAttr);
+    if (status != 0) {
+        PAL_ERR(LOG_TAG, "stream get attributes failed");
+        return status;
+    }
+    if (sAttr.type != PAL_STREAM_VOICE_CALL_RECORD &&
+        sAttr.type != PAL_STREAM_VOICE_CALL_MUSIC  &&
+        sAttr.type != PAL_STREAM_CONTEXT_PROXY) {
+        status = s->getAssociatedDevices(associatedDevices);
+        if (status != 0) {
+            PAL_ERR(LOG_TAG, "getAssociatedDevices Failed");
+            return status;
+        }
+    }
+
+    if (sAttr.direction == PAL_AUDIO_OUTPUT) {
+        for (auto &dev: associatedDevices) {
+            beDevId = dev->getSndDeviceId();
+            rmHandle->getBackendName(beDevId, backendname);
+            PAL_DBG(LOG_TAG, "backendname %s", backendname.c_str());
+            if (dev->getDeviceCount() == 1 &&
+                rmHandle->isBtA2dpDevice((pal_device_id_t) beDevId)) {
+                status = SessionAlsaUtils::getModuleInstanceId(mixerHandle,
+                    device, backendname.c_str(), DEVICE_HW_ENDPOINT_RX, &miid);
+                if (status) {
+                    PAL_ERR(LOG_TAG, "Failed to get tage info %x, status = %d",
+                                DEVICE_HW_ENDPOINT_RX, status);
+                    return status;
+                }
+                header = (struct apm_module_param_data_t *)
+                             calloc(1, sizeof(struct apm_module_param_data_t));
+                if (!header) {
+                    PAL_ERR(LOG_TAG, "header malloc failed %s", strerror(errno));
+                    return EINVAL;
+                }
+                header->module_instance_id = miid;
+                header->error_code = 0x0;
+                header->param_id = PARAM_ID_CONN_PROXY_EOS_SIGNAL;
+                header->param_size = 0;
+                status = SessionAlsaUtils::setMixerParameter(mixerHandle,
+                                             device,
+                                             header, sizeof(struct apm_module_param_data_t));
+                free(header);
+                if (status != 0) {
+                    PAL_ERR(LOG_TAG, "setMixerParameter failed");
+                    return status;
+                }
+                usleep(CONN_PROXY_EOS_DELAY);
+                break;
+            }
+        }
+    }
+    return status;
+}
