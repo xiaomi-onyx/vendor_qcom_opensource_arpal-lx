@@ -5718,11 +5718,8 @@ void ResourceManager::voiceUIDeferredSwitchLoop(std::shared_ptr<ResourceManager>
             is_wake_lock_acquired = true;
         }
 
-        if (rm->vui_switch_thread_exit_) {
-            if (is_wake_lock_acquired)
-                rm->releaseWakeLock();
+        if (rm->vui_switch_thread_exit_)
             break;
-        }
 
         if (deferred_switch_cnt_ > 0) {
             deferred_switch_cnt_--;
@@ -5739,6 +5736,9 @@ void ResourceManager::voiceUIDeferredSwitchLoop(std::shared_ptr<ResourceManager>
                 deferred_switch_cnt_ = -1;
         }
     }
+
+    if (is_wake_lock_acquired)
+        rm->releaseWakeLock();
 }
 
 void ResourceManager::handleDeferredSwitch()
