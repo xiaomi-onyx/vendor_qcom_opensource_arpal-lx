@@ -5658,7 +5658,7 @@ bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
      *    and exit the sleep in voiceUIDeferredSwitchLoop.
      */
     if (!stream_active) {
-        if (IsLowLatencyBargeinSupported()) {
+        if (IsLowLatencyBargeinSupported() && active_streams_st.size()) {
             deferredSwitchState =
                 (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) ? NO_DEFER :
                  DEFER_NLPI_LPI_SWITCH;
