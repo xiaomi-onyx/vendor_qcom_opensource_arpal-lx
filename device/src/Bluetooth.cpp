@@ -2268,7 +2268,10 @@ int32_t BtA2dp::getDeviceParameter(uint32_t param_id, void **param)
         uint32_t slatency = 0;
 
         if (a2dpState == A2DP_STATE_STARTED && totalActiveSessionRequests &&
-            ((param_bt_a2dp.latency == 0) || (codecFormat == CODEC_TYPE_APTX_AD))) {
+            ((param_bt_a2dp.latency == 0) ||
+             (codecFormat == CODEC_TYPE_APTX_AD) ||
+             (codecFormat == CODEC_TYPE_APTX_AD_QLEA) ||
+             (codecFormat == CODEC_TYPE_APTX_AD_R4))) {
             if (audio_sink_get_a2dp_latency_api) {
                 slatency = audio_sink_get_a2dp_latency_api(get_session_type());
             } else if (audio_sink_get_a2dp_latency) {

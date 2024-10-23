@@ -76,12 +76,11 @@ struct haptics_vi_cal_param {
 class HapticsDevProtection : public HapticsDev
 {
 protected :
-    bool hapticsdevProtEnable;
     bool threadExit;
     bool triggerCal;
     int minIdleTime;
     static haptics_dev_prot_cal_state hapticsDevCalState;
-    haptics_dev_prot_proc_state hapticsDevProcessingState;
+    static haptics_dev_prot_proc_state hapticsDevProcessingState;
     int *devTempList;
     static bool isHapDevInUse;
     static std::atomic<bool> calThrdCreated;
