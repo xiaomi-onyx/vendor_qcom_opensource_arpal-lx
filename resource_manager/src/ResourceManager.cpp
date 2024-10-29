@@ -14156,6 +14156,13 @@ bool ResourceManager::doDevAttrDiffer(struct pal_device *inDevAttr,
         }
     }
 
+    // For sco devices, current dev attr is priority, dont restore to
+    // previous attributes
+    if (isBtScoDevice(inDevAttr->id) && isBtScoDevice(curDevAttr->id)) {
+        PAL_DBG(LOG_TAG, "skip restore for sco devices, always curr dev attr is priority");
+        ret = false;
+    }
+
 exit:
     return ret;
 }
