@@ -769,6 +769,10 @@
         <ctl name="WSA_RX0 Digital Volume" value="50" />
     </path>
 
+    <path name="handset-ultrasound">
+        <path name="ultrasound-handset" />
+    </path>
+
     <path name="speaker-mono-2-ultrasound">
         <ctl name="WSA RX_MIX1 MUX" value="AIF_MIX1_PB" />
         <ctl name="WSA_RX1 MIX INP" value="RX_MIX1" />

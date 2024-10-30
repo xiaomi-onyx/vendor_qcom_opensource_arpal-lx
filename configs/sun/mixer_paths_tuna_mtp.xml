@@ -597,6 +597,10 @@
         <ctl name="WSA PBR Enable" value="1" />
     </path>
 
+    <path name="handset-ultrasound">
+        <path name="ultrasound-handset" />
+    </path>
+
     <path name="speaker-ultrasound">
         <path name="handset-ultrasound" />
         <path name="speaker-mono-2-ultrasound" />
