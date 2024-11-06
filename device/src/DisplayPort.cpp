@@ -417,24 +417,31 @@ int DisplayPort::init(pal_param_device_connection_t device_conn)
     status = getExtDispType(mixer, dp_config->controller, dp_config->stream);
     if (status < 0) {
         PAL_ERR(LOG_TAG," Failed to query disp type, status:%d", status);
+        return status;
     } else {
         cacheEdid(mixer, dp_config->controller, dp_config->stream);
     }
     if (is_hdmi_sysfs_node_init == false) {
         is_hdmi_sysfs_node_init = true;
-        updateAudioAckState(EXT_DISPLAY_PLUG_STATUS_NOTIFY_ENABLE, dp_controller, dp_stream);
+        status = updateAudioAckState(EXT_DISPLAY_PLUG_STATUS_NOTIFY_ENABLE,
+                                     dp_controller, dp_stream);
+        if (status < 0) {
+            PAL_ERR(LOG_TAG,"EXT_DISPLAY_PLUG_STATUS_NOTIFY_ENABLE failed");
+            return status;
+        }
     }
-    updateAudioAckState(EXT_DISPLAY_PLUG_STATUS_NOTIFY_CONNECT, dp_controller, dp_stream);
+    status = updateAudioAckState(EXT_DISPLAY_PLUG_STATUS_NOTIFY_CONNECT, dp_controller, dp_stream);
 
-    PAL_DBG(LOG_TAG," Exit");
-    return 0;
+    PAL_DBG(LOG_TAG," Exit with status %d", status);
+    return status;
 }
 
 int DisplayPort::deinit(pal_param_device_connection_t device_conn __unused)
 {
-    updateAudioAckState(EXT_DISPLAY_PLUG_STATUS_NOTIFY_DISCONNECT, dp_controller, dp_stream);
+    int status = updateAudioAckState(EXT_DISPLAY_PLUG_STATUS_NOTIFY_DISCONNECT,
+                                     dp_controller, dp_stream);
     //To-Do : Have to invalidate the cahed EDID
-    return 0;
+    return status;
 }
 
 bool DisplayPort::isDisplayPortEnabled () {
