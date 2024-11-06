@@ -66,6 +66,8 @@ StreamASR::StreamASR(struct pal_stream_attributes *sattr,
     curState = nullptr;
     prevState = nullptr;
     engine = nullptr;
+    rxEcDev = nullptr;
+    enableEc = false;
     stateToRestore = ASR_STATE_NONE;
 
     mVolumeData = (struct pal_volume_data *)malloc(sizeof(struct pal_volume_data)
@@ -821,12 +823,36 @@ int32_t StreamASR::ASRIdle::ProcessEvent(
                 PAL_ERR(LOG_TAG, "Error:%d Start asr engine failed", status);
                 goto err_exit;
             }
+
+            if (asrStream.enableEc && asrStream.rxEcDev) {
+                Stream *s = static_cast<Stream *>(&asrStream);
+                status = asrStream.engine->setECRef(s, asrStream.rxEcDev, asrStream.enableEc);
+                if (status) {
+                    PAL_ERR(LOG_TAG, "Error:%d failed to set EC Reference", status);
+                } else {
+                    asrStream.rxEcDev = nullptr;
+                    asrStream.enableEc = false;
+                }
+            }
             TransitTo(ASR_STATE_ACTIVE);
             break;
         err_exit:
             if (asrStream.mDevices.size() > 0) {
                 asrStream.rm->deregisterDevice(asrStream.mDevices[0], &asrStream);
                 asrStream.mDevices[0]->stop();
+            }
+            break;
+        }
+        case ASR_EV_EC_REF: {
+            /*
+             * While in use case setup, device start and registration to
+             * resource manager triggers setting EC reference, if Rx
+             * stream is already active.
+             */
+            if (asrStream.deviceOpened) {
+                ASRECRefEventData *data = (ASRECRefEventData *)evCfg->data.get();
+                asrStream.enableEc = data->isEnable;
+                asrStream.rxEcDev = data->dev;
             }
             break;
         }
