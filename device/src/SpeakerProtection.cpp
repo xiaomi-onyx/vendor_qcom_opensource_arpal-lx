@@ -1239,6 +1239,9 @@ SpeakerProtection::SpeakerProtection(struct pal_device *device,
     calibrationCallbackStatus = 0;
     mDspCallbackRcvd = false;
 
+    viCustomPayloadSize = 0;
+    viCustomPayload = NULL;
+
     rm->getDeviceInfo(device->id, PAL_STREAM_PROXY, "", &devinfo);
     numberOfChannels = devinfo.channels;
     PAL_DBG(LOG_TAG, "Number of Channels %d", numberOfChannels);
@@ -1464,6 +1467,12 @@ int SpeakerProtection::viTxSetupThreadLoop()
     std::shared_ptr<Device> dev = nullptr;
 
     PAL_DBG(LOG_TAG, "Enter: %s", __func__);
+
+    if (!builder) {
+        PAL_ERR(LOG_TAG, "Failed to allocate memory for payload builder");
+        goto exit;
+    }
+
     rm = ResourceManager::getInstance();
     if (!rm) {
         PAL_ERR(LOG_TAG, "Failed to get resource manager instance");

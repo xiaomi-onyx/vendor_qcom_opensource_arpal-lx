@@ -1062,6 +1062,8 @@ HapticsDevProtection::HapticsDevProtection(struct pal_device *device,
                              this);
         calThrdCreated = true;
     }
+
+    VIscale = NULL;
 }
 
 HapticsDevProtection::~HapticsDevProtection()
