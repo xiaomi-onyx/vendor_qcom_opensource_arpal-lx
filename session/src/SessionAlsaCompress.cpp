@@ -1814,6 +1814,9 @@ int SessionAlsaCompress::stop(Stream * s __unused)
     switch (sAttr.direction) {
         case PAL_AUDIO_OUTPUT:
             if (compress && playback_started) {
+                // signal EOS for BT usecase to empty packets to avoid
+                // incomplete packets sent post graph stop
+                SessionAlsaUtils::signalBtEOS(s, compressDevIds.at(0), rm);
                 status = compress_stop(compress);
                 playback_started = false;
             }
@@ -2309,7 +2312,7 @@ int SessionAlsaCompress::setParameters(Stream *s __unused, int tagId, uint32_t p
             }
 
             if (vdata->no_of_volpair > 1 && sAttr.out_media_config.ch_info.channels > 1) {
-                builder->payloadMultichVolumemConfig(&alsaParamData, &alsaPayloadSize, miid, vdata);
+                builder->payloadMultichVolumeConfig(&alsaParamData, &alsaPayloadSize, miid, vdata);
             } else {
                 builder->payloadVolumeConfig(&alsaParamData, &alsaPayloadSize, miid, vdata);
             }

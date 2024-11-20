@@ -931,6 +931,8 @@ int SessionAlsaVoice::start(Stream * s)
     size_t payloadSize = 0;
     struct pal_volume_data *volume = NULL;
     bool isTxStarted = false, isRxStarted = false;
+    struct pal_device dAttr = {};
+    std::vector<std::shared_ptr<Device>> associatedDevices;
 
     PAL_DBG(LOG_TAG,"Enter");
 
@@ -1103,6 +1105,31 @@ int SessionAlsaVoice::start(Stream * s)
         }
     }
 
+    if (ResourceManager::isSilenceDetectionEnabledVoice) {
+
+        status = s->getAssociatedDevices(associatedDevices);
+        if (0 != status) {
+            PAL_ERR(LOG_TAG, "getAssociatedDevices Failed for Silence Detection\n");
+            goto silence_det_setup_done;
+        }
+
+        for (int i=0; i<associatedDevices.size(); i++) {
+        status = associatedDevices[i]->getDeviceAttributes(&dAttr);
+            if (0 != status) {
+                PAL_ERR(LOG_TAG, "getDeviceAttributes Failed for Silence Detection\n");
+                goto silence_det_setup_done;
+            }
+        }
+
+        if ((dAttr.id != PAL_DEVICE_IN_HANDSET_MIC) && (dAttr.id != PAL_DEVICE_IN_SPEAKER_MIC))
+            goto silence_det_setup_done;
+
+        (void) Session::enableSilenceDetection(rm, mixer, pcmDevTxIds, txAifBackEnds[0].second.data(), (uint64_t)this);
+
+silence_det_setup_done:
+        status = 0;
+    }
+
     status = pcm_start(pcmRx);
     if (status) {
         PAL_ERR(LOG_TAG, "pcm_start rx failed %d", status);
@@ -1191,8 +1218,34 @@ int SessionAlsaVoice::stop(Stream * s)
     int status = 0;
     int txDevId = PAL_DEVICE_NONE;
     std::shared_ptr<Device> rxDevice = nullptr;
+    std::vector<std::shared_ptr<Device>> associatedDevices;
+    struct pal_device dAttr = {};
 
     PAL_DBG(LOG_TAG,"Enter");
+
+    if (ResourceManager::isSilenceDetectionEnabledVoice) {
+       status = s->getAssociatedDevices(associatedDevices);
+       if (0 != status) {
+          PAL_ERR(LOG_TAG,"getAssociatedDevices Failed\n");
+          goto silence_det_setup_done;
+       }
+
+       for (int i = 0; i < associatedDevices.size();i++) {
+           status = associatedDevices[i]->getDeviceAttributes(&dAttr);
+           if (0 != status) {
+               PAL_ERR(LOG_TAG,"get Device Attributes Failed\n");
+               goto silence_det_setup_done;
+           }
+       }
+       if (dAttr.id == PAL_DEVICE_IN_HANDSET_MIC || dAttr.id ==  PAL_DEVICE_IN_SPEAKER_MIC) {
+           (void) Session::disableSilenceDetection(rm, mixer,
+                           pcmDevTxIds, txAifBackEnds[0].second.data(), (uint64_t)this);
+       }
+
+silence_det_setup_done:
+           status = 0;
+    }
+
     /*disable sidetone*/
     if (sideTone_cnt > 0) {
         status = getTXDeviceId(s, &txDevId);

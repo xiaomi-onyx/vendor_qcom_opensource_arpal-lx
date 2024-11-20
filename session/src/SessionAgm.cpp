@@ -104,7 +104,7 @@ void eventCallback(uint32_t session_id, struct agm_event_cb_params *event_params
 
             if(!rw_done_payload->buff.ts){
                 PAL_ERR(LOG_TAG, "Calloc allocation failed rw_done_payload buff");
-                goto done;
+                goto free_rw_done_payload;
             }
             rw_done_payload->buff.ts->tv_sec = agm_rw_done_payload->buff.timestamp/MICRO_SECS_PER_SEC;
             if (ULONG_MAX/MICRO_SECS_PER_SEC > rw_done_payload->buff.ts->tv_sec) {
@@ -145,11 +145,16 @@ void eventCallback(uint32_t session_id, struct agm_event_cb_params *event_params
        PAL_INFO(LOG_TAG, "no session cb registerd or event not valid");
     }
 
-    if (rw_done_payload && rw_done_payload->buff.ts)
+    if (rw_done_payload && rw_done_payload->buff.ts) {
         free(rw_done_payload->buff.ts);
+        rw_done_payload->buff.ts = NULL;
+    }
 
-    if (rw_done_payload)
+free_rw_done_payload:
+    if (rw_done_payload) {
         free(rw_done_payload);
+        rw_done_payload = NULL;
+    }
 
 done:
     return;

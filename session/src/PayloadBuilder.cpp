@@ -489,7 +489,7 @@ void PayloadBuilder::payloadVolumeConfig(uint8_t** payload, size_t* size,
     PAL_DBG(LOG_TAG, "payload %pK size %zu", *payload, *size);
 }
 
-void PayloadBuilder::payloadMultichVolumemConfig(uint8_t** payload, size_t* size,
+void PayloadBuilder::payloadMultichVolumeConfig(uint8_t** payload, size_t* size,
         uint32_t miid, struct pal_volume_data* voldata)
 {
     const uint32_t PLAYBACK_MULTI_VOLUME_GAIN = 1 << 28;

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
-<!-- Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+<!-- Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -43,31 +43,17 @@
         <param key="connectivity_proxy_enabled" value ="true" />
         <param key="logging_level" value ="3" />
         <param key="context_manager_enable" value ="true" />
+        <param key="lpi_logging_enable" value ="false" />
         <!-- change PAL_DEVICE_OUT_ULTRASOUND_DEDICATED backend name when set it to true -->
         <param key="upd_dedicated_be" value ="false" />
-        <param key="upd_duty_cycle_enable" value="false" />
-        <param key="dual_mono" value ="false" />
         <param key="signal_handler" value ="true" />
         <param key="device_mux_config" value ="false" />
+        <param key="upd_duty_cycle_enable" value="false" />
         <param key="upd_virtual_port" value ="false" />
         <param key="haptics_priority" value ="touch_haptics" />
-        <param key="haptics_through_wsa" value ="true" />
+        <param key="haptics_through_wsa" value ="false" />
         <param key="dummy_dev_enable" value ="true" />
     </config_params>
-    <config_volume>
-        <use_volume_set_param>0</use_volume_set_param>
-        <supported_streams>
-            <supported_stream>PAL_STREAM_ULTRA_LOW_LATENCY</supported_stream>
-            <supported_stream>PAL_STREAM_COMPRESSED</supported_stream>
-        </supported_streams>
-    </config_volume>
-    <config_lpm>
-        <use_disable_lpm>1</use_disable_lpm>
-        <lpm_supported_streams>
-            <lpm_supported_stream>PAL_STREAM_LOW_LATENCY</lpm_supported_stream>
-            <lpm_supported_stream>PAL_STREAM_ULTRA_LOW_LATENCY</lpm_supported_stream>
-        </lpm_supported_streams>
-    </config_lpm>
     <config_gapless key="gapless_supported" value="1"/>
     <bt_codecs>
         <codec codec_format="CODEC_TYPE_AAC" codec_type="enc|dec" codec_library="lib_bt_bundle.so" />
@@ -108,7 +94,6 @@
         <avoid_vote_stream_type>PAL_STREAM_CONTEXT_PROXY</avoid_vote_stream_type>
     </sleep_monitor_vote_streams>
     <perf_lock library="libqti-perfd-client.so" config="0x40400000, 0x1, 0x40800000, 0x514" />
-    <silence_detection_config pcm="1" voice="1" duration="3000"/>
     <group_device_cfg>
         <upd_rx>
             <snd_device name="handset" />
@@ -143,6 +128,7 @@
             <samplerate>48000</samplerate>
             <snd_device_name>handset-mic</snd_device_name>
             <ec_enable>0</ec_enable>
+            <silence_detection_enabled>1</silence_detection_enabled>
             <usecase>
                 <name>PAL_STREAM_LOW_LATENCY</name>
             </usecase>
@@ -269,6 +255,7 @@
             <samplerate>48000</samplerate>
             <channels>1</channels>
             <ec_enable>0</ec_enable>
+            <silence_detection_enabled>1</silence_detection_enabled>
             <snd_device_name>speaker-mic</snd_device_name>
             <usecase>
                 <name>PAL_STREAM_LOW_LATENCY</name>
@@ -563,7 +550,7 @@
                 <name>PAL_STREAM_PROXY</name>
             </usecase>
         </in-device>
-        <in-device>
+       <in-device>
             <id>PAL_DEVICE_IN_RECORD_PROXY</id>
             <back_end_name>PCM_RT_PROXY-TX-2</back_end_name>
             <max_channels>2</max_channels>
@@ -578,7 +565,7 @@
             <back_end_name>CODEC_DMA-LPAIF_WSA-TX-0</back_end_name>
             <max_channels>2</max_channels>
             <channels>2</channels>
-            <samplerate>8000</samplerate>
+            <samplerate>48000</samplerate>
             <bit_width>32</bit_width>
             <snd_device_name>vi-feedback</snd_device_name>
             <usecase>
@@ -662,8 +649,7 @@
         </in-device>
         <in-device>
             <id>PAL_DEVICE_IN_EXT_EC_REF</id>
-            <!-- The below back_end_name is for internal testing purpose only, needs to be modified to appropriate value if TDM/MI2S -->
-            <back_end_name>CODEC_DMA-LPAIF_WSA-TX-1</back_end_name>
+            <back_end_name>MI2S-LPAIF-TX-TERTIARY</back_end_name>
             <snd_device_name>ext_ec_ref_tx</snd_device_name>
             <max_channels>2</max_channels>
             <channels>2</channels>
@@ -686,7 +672,7 @@
             <id>PAL_DEVICE_IN_HAPTICS_VI_FEEDBACK</id>
             <back_end_name>CODEC_DMA-LPAIF_WSA2-TX-0</back_end_name>
             <snd_device_name>haptics-vi-feedback-mono</snd_device_name>
-            <max_channels>1</max_channels>
+            <max_channels>2</max_channels>
             <channels>1</channels>
             <bit_width>32</bit_width>
             <samplerate>8000</samplerate>
@@ -719,17 +705,17 @@
             <channels>2</channels>
             <samplerate>48000</samplerate>
             <snd_device_name>speaker</snd_device_name>
-            <speaker_protection_enabled>1</speaker_protection_enabled>
+            <speaker_protection_enabled>0</speaker_protection_enabled>
             <fractional_sr>0</fractional_sr>
             <!-- To enable external EC reference the flag extec_ref_enabled must be added as 1 -->
             <ext_ec_ref_enabled>0</ext_ec_ref_enabled>
             <!-- Flag to specify cps mode which is applicable
                  Values: disable CPS: 0
                          CPS streaming: 1
-                         ADSP control mode: 2
+                         ADSP control mode : 2
             -->
-            <cps_mode>2</cps_mode>
-            <vbat_enabled>1</vbat_enabled>
+            <cps_mode>1</cps_mode>
+            <vbat_enabled>0</vbat_enabled>
             <!--specify the supported bit format on speaker end point -->
             <!--this should be in the form of pal_audio_fmt_id-->
             <!--e.g <supported_bit_format >PAL_AUDIO_FMT_PCM_S24_LE</supported_bit_format>-->
@@ -1052,7 +1038,7 @@
             <max_channels>2</max_channels>
             <channels>1</channels>
             <snd_device_name>haptics-dev</snd_device_name>
-            <haptics_protection_enabled>1</haptics_protection_enabled>
+            <haptics_protection_enabled>0</haptics_protection_enabled>
             <usecase>
                 <name>PAL_STREAM_HAPTICS</name>
                 <custom-config key="haptics-over-wsa">
@@ -1109,6 +1095,7 @@
             <name>PAL_STREAM_VOIP_TX</name>
                 <policies>
                     <ec_ref>
+                        <disabled_stream>PAL_STREAM_LOW_LATENCY</disabled_stream>
                         <disabled_stream>PAL_STREAM_GENERIC</disabled_stream>
                     </ec_ref>
                 </policies>

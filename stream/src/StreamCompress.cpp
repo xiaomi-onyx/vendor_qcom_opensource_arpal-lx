@@ -130,6 +130,18 @@ StreamCompress::StreamCompress(const struct pal_stream_attributes *sattr, struct
 
     session->registerCallBack(handleSessionCallBack, (uint64_t)this);
     PAL_VERBOSE(LOG_TAG,"Create new Devices with no_of_devices - %d", no_of_devices);
+    /* check if it's combo device with speaker + HS */
+    for (int i = 0; no_of_devices > 1 && i < no_of_devices; i++) {
+        if(dattr[i].id == PAL_DEVICE_OUT_SPEAKER ||
+            dattr[i].id == PAL_DEVICE_OUT_WIRED_HEADSET ||
+            dattr[i].id == PAL_DEVICE_OUT_WIRED_HEADPHONE) {
+           PAL_DBG(LOG_TAG, "set isComboHeadsetActive true, %pk", this);
+           this->isComboHeadsetActive = true;
+        } else {
+           PAL_DBG(LOG_TAG, "set isComboHeadsetActive false, %pk", this);
+           this->isComboHeadsetActive = false;
+        }
+    }
     bool str_registered = false;
     for (uint32_t i = 0; i < no_of_devices; i++) {
 
@@ -228,6 +240,10 @@ closeDevice:
 exit:
     palStateEnqueue(this, PAL_STATE_OPENED, status);
     mStreamMutex.unlock();
+    if (status && mStreamAttr->direction == PAL_AUDIO_OUTPUT) {
+        PAL_ERR(LOG_TAG, "Stream open failed, sending error callback");
+        handleSessionCallBack((uint64_t)this, PAL_STREAM_CBK_EVENT_ERROR, (void*)NULL, 0);
+    }
     PAL_DBG(LOG_TAG,"Exit status: %d", status);
     return status;
 }
@@ -577,6 +593,10 @@ exit:
     palStateEnqueue(this, PAL_STATE_STARTED, status);
     PAL_DBG(LOG_TAG,"Exit status: %d", status);
     mStreamMutex.unlock();
+    if (status && mStreamAttr->direction == PAL_AUDIO_OUTPUT) {
+        PAL_ERR(LOG_TAG, "Stream start failed, sending error callback");
+        handleSessionCallBack((uint64_t)this, PAL_STREAM_CBK_EVENT_ERROR, (void*)NULL, 0);
+    }
     return status;
 }
 

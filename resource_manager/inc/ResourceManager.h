@@ -94,6 +94,7 @@ typedef enum {
 #define AUDIO_PARAMETER_KEY_HAPTICS_PRIORITY "haptics_priority"
 #define AUDIO_PARAMETER_KEY_WSA_HAPTICS "haptics_through_wsa"
 #define AUDIO_PARAMETER_KEY_DUMMY_DEV_ENABLE "dummy_dev_enable"
+#define AUDIO_PARAMETER_MULTI_SR_COMBO_SUPPORTED "multiple_sample_rate_combo_supported"
 #define MAX_PCM_NAME_SIZE 50
 #define MAX_STREAM_INSTANCES (sizeof(uint64_t) << 3)
 #define MIN_USECASE_PRIORITY 0xFFFFFFFF
@@ -668,6 +669,8 @@ public:
     static bool isQmpEnabled;
     /* Variable to store whether Speaker protection is enabled or not */
     static bool isSpeakerProtectionEnabled;
+    //Variable to check if multiple sampe rate during combo device supported
+    static bool is_multiple_sample_rate_combo_supported;
     static bool isHandsetProtectionEnabled;
     static bool isHapticsProtectionEnabled;
     static bool isChargeConcurrencyEnabled;
@@ -713,8 +716,12 @@ public:
     static bool isHapticsthroughWSA;
     /* Variable to store max volume index for voice call */
     static int max_voice_vol;
-    /* Variable to store if Silence Detection is enabled */
-    static bool isSilenceDetectionEnabled;
+    /*Silence Detection Enable flag for PCM session*/
+    static bool isSilenceDetectionEnabledPcm;
+    /*Silence Detection Enable flag for Voice session*/
+    static bool isSilenceDetectionEnabledVoice;
+    /*Silence Detection Duration Configuration*/
+    static uint32_t silenceDetectionDuration;
     /*variable to store MSPP linear gain*/
     pal_param_mspp_linear_gain_t linear_gain;
 #ifdef SOC_PERIPHERAL_PROT
@@ -1000,6 +1007,7 @@ public:
     static void processCardInfo(struct xml_userdata *data, const XML_Char *tag_name);
     static void processSpkrTempCtrls(const XML_Char **attr);
     static void processBTCodecInfo(const XML_Char **attr, const int attr_count);
+    static void processSilenceDetectionConfig(const XML_Char **attr);
     static void processPerfLockConfig(const XML_Char **attr);
     static void startTag(void *userdata __unused, const XML_Char *tag_name, const XML_Char **attr);
     static void snd_data_handler(void *userdata, const XML_Char *s, int len);
@@ -1112,6 +1120,7 @@ public:
                              const struct pal_stream_attributes *sAttr,
                              std::vector<Stream*> &streamsToSwitch,
                              struct pal_device *streamDevAttr);
+    void checkAndUpdateHeadsetDevConfig(struct pal_device *newDevAttr, bool isSwitchCase);
     static void sendCrashSignal(int signal, pid_t pid, uid_t uid);
     static bool isSsrDownFeasible(std::shared_ptr<ResourceManager> rm, int type);
     bool isStreamSupportedInsndCardStandy(uint32_t type);
