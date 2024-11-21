@@ -4221,7 +4221,7 @@ int SessionAlsaPcm::ResetMmapBuffer(Stream *s) {
 
 // NOTE: only used by Voice UI for Google hotword api query
 int SessionAlsaPcm::openGraph(Stream *s) {
-    int status = 0;
+    int status = 0, ret = 0;
     struct pcm_config config;
     struct pal_stream_attributes sAttr = {};
     std::vector<std::shared_ptr<Device>> associatedDevices;
@@ -4265,19 +4265,19 @@ int SessionAlsaPcm::openGraph(Stream *s) {
         } else {
             PAL_ERR(LOG_TAG, "frontendIDs is not available.");
             status = -EINVAL;
-            goto exit;
+            goto error_open;
         }
 
         if (!pcm) {
             PAL_ERR(LOG_TAG, "pcm open failed");
             status = errno;
-            goto exit;
+            goto error_open;
         }
 
         if (!pcm_is_ready(pcm)) {
             PAL_ERR(LOG_TAG, "pcm open not ready");
             status = errno;
-            goto exit;
+            goto error_open;
         }
 
         mState = SESSION_OPENED;
@@ -4286,6 +4286,13 @@ int SessionAlsaPcm::openGraph(Stream *s) {
         status = -EINVAL;
         goto exit;
     }
+
+error_open:
+    ret = close(s);
+    if (ret) {
+        PAL_ERR(LOG_TAG, "session close failed %d", ret);
+    }
+
 exit:
     PAL_DBG(LOG_TAG, "Exit status: %d", status);
     return status;
