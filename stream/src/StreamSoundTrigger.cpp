@@ -3967,3 +3967,11 @@ bool StreamSoundTrigger::IsSameDeviceType(
               curr_dev_id == PAL_DEVICE_IN_WIRED_HEADSET));
     }
 }
+
+bool StreamSoundTrigger::isLPIProfile() {
+    if (cap_prof_ && strstr(cap_prof_->GetSndName().c_str(), "lpi")) {
+        return true;
+    } else {
+        return false;
+    }
+}

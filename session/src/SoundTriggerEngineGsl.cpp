@@ -511,13 +511,15 @@ SoundTriggerEngineGsl::SoundTriggerEngineGsl(
         throw std::runtime_error("No sound model config present");
     }
 
+    // get lpi state from stream side
+    use_lpi_ = dynamic_cast<StreamSoundTrigger *>(s)->isLPIProfile();
+
     // Create session
     rm = ResourceManager::getInstance();
     if (!rm) {
         PAL_ERR(LOG_TAG, "Failed to get ResourceManager instance");
         throw std::runtime_error("Failed to get ResourceManager instance");
     }
-    use_lpi_ = rm->getLPIUsage();
     session_ = Session::makeSession(rm, &sAttr);
     if (!session_) {
         PAL_ERR(LOG_TAG, "Failed to create session");
