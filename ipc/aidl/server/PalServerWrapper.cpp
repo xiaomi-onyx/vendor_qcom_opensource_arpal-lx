@@ -969,7 +969,30 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_gef_rw_param(
         int32_t paramId, const std::vector<uint8_t> &paramPayload, PalDeviceId devId,
         PalStreamType streamType, int8_t dir, std::vector<uint8_t> *aidlReturn) {
-    return ScopedAStatus::ok();
+    int32_t ret = 0;
+    uint32_t paramSize = paramPayload.size() * sizeof(uint8_t);
+    uint8_t *palParamPayload = NULL;
+
+    ALOGV("%s: enter", __func__);
+    if (paramSize > 0) {
+        palParamPayload = (uint8_t *)calloc(1, paramSize);
+        if (palParamPayload == NULL) {
+            ALOGE("%s: Cannot allocate memory for palParamPayload ", __func__);
+            return status_tToBinderResult(-ENOMEM);
+        }
+        memcpy(palParamPayload, paramPayload.data(), paramSize);
+    }
+
+    ret = pal_gef_rw_param(paramId, (void *)palParamPayload,
+        paramSize, static_cast<pal_device_id_t>(devId),
+        static_cast<pal_stream_type_t>(streamType), dir);
+
+    if (!ret && (dir == GEF_PARAM_READ)) {
+        aidlReturn->resize(paramSize);
+        memcpy(aidlReturn->data(), palParamPayload, paramSize);
+    }
+    free(palParamPayload);
+    return status_tToBinderResult(ret);
 }
 
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_get_tags_with_module_info(
