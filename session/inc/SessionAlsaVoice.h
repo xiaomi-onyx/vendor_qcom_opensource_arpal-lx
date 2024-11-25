@@ -35,7 +35,7 @@
 
 /*
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2022-2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 
 Redistribution and use in source and binary forms, with or without
@@ -122,6 +122,7 @@ public:
     int start(Stream * s) override;
     int stop(Stream * s) override;
     int close(Stream * s) override;
+    int silenceDetectionConfig(uint8_t config, struct pal_device *dattr) override;
     int setupSessionDevice(Stream* streamHandle, pal_stream_type_t streamType,
         std::shared_ptr<Device> deviceToConnect) override;
     int disconnectSessionDevice(Stream *streamHandle,

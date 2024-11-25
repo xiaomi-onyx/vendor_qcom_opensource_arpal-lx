@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1590,6 +1590,14 @@ int32_t Stream::connectStreamDevice_l(Stream* streamHandle, struct pal_device *d
         goto dev_close;
     }
 
+    if((dev->getSndDeviceId() == PAL_DEVICE_IN_HANDSET_MIC ||
+        dev->getSndDeviceId() == PAL_DEVICE_IN_SPEAKER_MIC) &&
+        ResourceManager::isSilenceDetectionEnabledVoice) {
+            status = session->silenceDetectionConfig(SD_ENABLE, dattr);
+            if (status != 0)
+                 PAL_ERR(LOG_TAG, "Silence Detection Enable param failed \n");
+    }
+
     /* Special handling for aaudio usecase on A2DP/BLE/Speaker.
      * For mmap usecase, if device switch happens to A2DP/BLE/Speaker device
      * before stream_start then start A2DP/BLE/speaker dev. since it won't be
@@ -1626,6 +1634,15 @@ int32_t Stream::connectStreamDevice_l(Stream* streamHandle, struct pal_device *d
         rm->unlockGraph();
         goto dev_stop;
     }
+
+    if((dev->getSndDeviceId() == PAL_DEVICE_IN_HANDSET_MIC ||
+        dev->getSndDeviceId() == PAL_DEVICE_IN_SPEAKER_MIC) &&
+        ResourceManager::isSilenceDetectionEnabledVoice) {
+            status = session->silenceDetectionConfig(SD_CONNECT, nullptr);
+            if (status != 0)
+                 PAL_ERR(LOG_TAG, "Silence Detection CONNECT failed \n");
+    }
+
     rm->unlockGraph();
     if (currentState != STREAM_STOPPED) {
         rm->registerDevice(dev, this);
@@ -1773,6 +1790,15 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
          * Check the current output device if need to check and handle later
          * in case the new routing request is PAL_DEVICE_NONE.
          */
+        if((curDevId == PAL_DEVICE_IN_HANDSET_MIC ||
+            curDevId == PAL_DEVICE_IN_SPEAKER_MIC) &&
+            (ResourceManager::isSilenceDetectionEnabledVoice ||
+             ResourceManager::isSilenceDetectionEnabledPcm)) {
+            status = session->silenceDetectionConfig(SD_DISCONNECT, nullptr);
+            if (status != 0)
+                 PAL_ERR(LOG_TAG, "Silence Detection disable failed \n");
+        }
+
         if (curDevId < PAL_DEVICE_OUT_MAX &&
             (((rm->isBtA2dpDevice(curDevId) || rm->isBtScoDevice(curDevId))
             && (!rm->isDeviceReady(curDevId))) ||

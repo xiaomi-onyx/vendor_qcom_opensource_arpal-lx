@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -92,6 +92,7 @@ public:
     int start(Stream * s) override;
     int stop(Stream * s) override;
     int close(Stream * s) override;
+    int silenceDetectionConfig(uint8_t config, struct pal_device *dattr) override;
     int readBufferInit(Stream *s, size_t noOfBuf, size_t bufSize, int flag) override;
     int writeBufferInit(Stream *s, size_t noOfBuf, size_t bufSize, int flag) override;
     int read(Stream *s, int tag, struct pal_buffer *buf, int * size) override;
