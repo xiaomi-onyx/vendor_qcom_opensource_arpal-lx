@@ -134,6 +134,8 @@ class SoundTriggerEngineGsl : public SoundTriggerEngine {
     bool IsEngineActive();
     std::vector<Stream *> GetBufferingStreams();
     void DetachStream(Stream *s, bool erase_engine);
+    bool UpdateGlobalDetectionStatus(bool is_active);
+
     Session *session_;
     PayloadBuilder *builder_;
     st_module_type_t module_type_;
@@ -178,5 +180,9 @@ class SoundTriggerEngineGsl : public SoundTriggerEngine {
     std::shared_ptr<Device> rx_ec_dev_;
     std::recursive_mutex ec_ref_mutex_;
     Stream* device_switch_stream_;
+
+    // for global concurrent detection check
+    static std::mutex global_det_mutex_;
+    static std::map<SoundTriggerEngineGsl*, int> eng_det_stat_map_;
 };
 #endif  // SOUNDTRIGGERENGINEGSL_H

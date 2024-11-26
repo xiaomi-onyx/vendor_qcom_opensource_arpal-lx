@@ -63,8 +63,10 @@ std::map<st_module_type_t,std::vector<std::shared_ptr<SoundTriggerEngineGsl>>>
 std::map<Stream*, std::shared_ptr<SoundTriggerEngineGsl>>
                 SoundTriggerEngineGsl::str_eng_map_;
 std::mutex SoundTriggerEngineGsl::eng_create_mutex_;
+std::mutex SoundTriggerEngineGsl::global_det_mutex_;
 int32_t SoundTriggerEngineGsl::engine_count_ = 0;
 std::condition_variable cvEOS;
+std::map<SoundTriggerEngineGsl*, int> SoundTriggerEngineGsl::eng_det_stat_map_;
 
 void SoundTriggerEngineGsl::EventProcessingThread(
     SoundTriggerEngineGsl *gsl_engine) {
@@ -533,11 +535,14 @@ SoundTriggerEngineGsl::SoundTriggerEngineGsl(
         throw std::runtime_error("failed to create even processing thread");
     }
 
+    eng_det_stat_map_[this] = 0;
+
     PAL_DBG(LOG_TAG, "Exit");
 }
 
 SoundTriggerEngineGsl::~SoundTriggerEngineGsl() {
     PAL_INFO(LOG_TAG, "Enter");
+    eng_det_stat_map_.erase(this);
     {
         exit_buffering_ = true;
         std::unique_lock<std::mutex> lck(mutex_);
@@ -1059,7 +1064,7 @@ int32_t SoundTriggerEngineGsl::RestartRecognition_l(Stream *s) {
         return RESTART_IGNORED;
     }
 
-    if (sm_cfg_->GetConcurrentEventCapture() &&
+    if (sm_cfg_->GetEnableIntraConcurrentDetection() &&
         (!det_streams_q_.empty() || CheckIfOtherStreamsBuffering(s))) {
         /*
          * For PDK model, per_model_reset will be issued as part of
@@ -1398,7 +1403,7 @@ void SoundTriggerEngineGsl::HandleSessionEvent(uint32_t event_id __unused,
         return;
     }
     if (eng_state != ENG_ACTIVE) {
-        if (sm_cfg_->GetConcurrentEventCapture()) {
+        if (sm_cfg_->GetEnableIntraConcurrentDetection()) {
             if (eng_state != ENG_BUFFERING && eng_state != ENG_DETECTED) {
                 PAL_DBG(LOG_TAG, "Unhandled state %d ignore event", eng_state);
                 return;
@@ -1447,6 +1452,16 @@ void SoundTriggerEngineGsl::HandleSessionEvent(uint32_t event_id __unused,
 
     if (!s) {
         PAL_ERR(LOG_TAG, "No detected stream found");
+        if (eng_state == ENG_ACTIVE) {
+            rm->releaseWakeLock();
+        }
+        return;
+    }
+
+    if (!vui_ptfm_info_->GetEnableInterConcurrentDetection() &&
+               !UpdateGlobalDetectionStatus(true)) {
+        PAL_ERR(LOG_TAG, "Discard event as other VA detection is on-going");
+        UpdateSessionPayload(s, ENGINE_RESET);
         if (eng_state == ENG_ACTIVE) {
             rm->releaseWakeLock();
         }
@@ -1894,6 +1909,9 @@ int32_t SoundTriggerEngineGsl::UpdateSessionPayload(Stream *s, st_param_id_type_
             ses_param_id, status);
     }
 
+    if (param == ENGINE_RESET && !vui_ptfm_info_->GetEnableInterConcurrentDetection())
+        UpdateGlobalDetectionStatus(false);
+
     return status;
 }
 
@@ -1994,4 +2012,25 @@ bool SoundTriggerEngineGsl::CheckForStartRecognition() {
         }
     }
     return status;
+}
+
+bool SoundTriggerEngineGsl::UpdateGlobalDetectionStatus(bool is_active) {
+    bool is_global_det_handling = false;
+
+    std::unique_lock<std::mutex> lck(global_det_mutex_);
+
+    if (is_active) {
+        for (const auto& [key, value] : eng_det_stat_map_) {
+            if (value && key != this) {
+                is_global_det_handling = true;
+                return false;
+            }
+        }
+        eng_det_stat_map_[this]++;
+    } else {
+        if (eng_det_stat_map_[this])
+            eng_det_stat_map_[this]--;
+    }
+
+    return true;
 }
