@@ -1651,7 +1651,7 @@
                 <!-- ASR input DAM buffer size in millseconds for non-partial mode -->
                 <param asr_input_buffer_size="10000" />
                 <!-- ASR input DAM buffer size in millseconds for partial mode -->
-                <param asr_input_buffer_size_partial_mode="3000" />
+                <param asr_input_buffer_size_partial_mode="40" />
                 <!-- ASR output buffer size in bytes for continuous buffering mode -->
                 <param buffering_mode_out_buf_size="102400" />
                 <!-- ASR timeout in millseconds for no silence detection in command mode -->
