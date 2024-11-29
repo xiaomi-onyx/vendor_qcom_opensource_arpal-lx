@@ -1444,16 +1444,22 @@ int32_t Stream::disconnectStreamDevice_l(Stream* streamHandle, pal_device_id_t d
                 rm->deregisterDevice(mDevices[i], this);
             }
 
-            if(mDevices[i]->getSndDeviceId() == PAL_DEVICE_OUT_SPEAKER &&
-                     ResourceManager::isSpeakerProtectionEnabled) {
-               status = mDevices[i]->stop();
-               if (0 != status) {
-                   PAL_ERR(LOG_TAG, "device stop failed with status %d", status);
-                   rm->unlockGraph();
-                   goto exit;
-               }
+            bool isDeviceStopped = false;
+            if ((currentState != STREAM_INIT && currentState != STREAM_STOPPED) &&
+                mDevices[i]->getSndDeviceId() == PAL_DEVICE_OUT_SPEAKER &&
+                ResourceManager::isSpeakerProtectionEnabled) {
+                /*
+                 * Special handling if speaker protection enabled to disable vi
+                 * feedback firstly before disconnecting session device to avoid
+                 * glitch in vi_tx.
+                 */
+                status = mDevices[i]->stop();
+                isDeviceStopped = true;
+                if (0 != status) {
+                    PAL_ERR(LOG_TAG, "device stop failed with status %d", status);
+                    goto exit;
+                }
             }
-
             rm->lockGraph();
             status = session->disconnectSessionDevice(streamHandle, mStreamAttr->type, mDevices[i]);
             if (0 != status) {
@@ -1466,12 +1472,12 @@ int32_t Stream::disconnectStreamDevice_l(Stream* streamHandle, pal_device_id_t d
              * hence stop A2DP/BLE device to match device start&stop count.
              */
 
-            if ((currentState != STREAM_INIT && currentState != STREAM_STOPPED) ||
+            if (((currentState != STREAM_INIT && currentState != STREAM_STOPPED) ||
                 ((currentState == STREAM_INIT || currentState == STREAM_STOPPED) &&
                 ((mDevices[i]->getSndDeviceId() == PAL_DEVICE_OUT_BLUETOOTH_A2DP) ||
                 (mDevices[i]->getSndDeviceId() == PAL_DEVICE_OUT_BLUETOOTH_BLE) ||
                 (mDevices[i]->getSndDeviceId() == PAL_DEVICE_OUT_SPEAKER)) &&
-                 isMMap)) {
+                 isMMap)) && !isDeviceStopped) {
                 status = mDevices[i]->stop();
                 if (0 != status) {
                     PAL_ERR(LOG_TAG, "device stop failed with status %d", status);
