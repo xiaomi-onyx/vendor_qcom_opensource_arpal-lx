@@ -2838,6 +2838,7 @@ int SessionAlsaPcm::read(Stream *s, int tag __unused, struct pal_buffer *buf, in
         }
 
         if ((0 != status) || (pcmReadSize == 0)) {
+            status = -EINVAL;
             PAL_ERR(LOG_TAG, "Failed to read data %d bytes read %d", status, pcmReadSize);
             break;
         }
