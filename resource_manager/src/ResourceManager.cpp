@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -526,13 +526,9 @@ std::thread ResourceManager::mixerEventTread;
 bool ResourceManager::mixerClosed = false;
 int ResourceManager::mixerEventRegisterCount = 0;
 int ResourceManager::TxconcurrencyEnableCount = 0;
-int ResourceManager::concurrencyEnableCount = 0;
 int ResourceManager::concurrencyDisableCount = 0;
-int ResourceManager::ACDConcurrencyEnableCount = 0;
 int ResourceManager::ACDConcurrencyDisableCount = 0;
-int ResourceManager::ASRConcurrencyEnableCount = 0;
 int ResourceManager::ASRConcurrencyDisableCount = 0;
-int ResourceManager::SNSPCMDataConcurrencyEnableCount = 0;
 int ResourceManager::SNSPCMDataConcurrencyDisableCount = 0;
 defer_switch_state_t ResourceManager::deferredSwitchState = NO_DEFER;
 std::thread ResourceManager::vui_deferred_switch_thread_;
@@ -1073,10 +1069,6 @@ ResourceManager::ResourceManager()
         throw std::runtime_error("Failed to allocate ContextManager");
 
     }
-
-    // init use_lpi_ flag
-    use_lpi_ = IsLPISupported();
-
 
 #ifdef SOC_PERIPHERAL_PROT
     socPerithread = std::thread(loadSocPeripheralLib);
@@ -4720,13 +4712,6 @@ bool ResourceManager::isNLPISwitchSupported() {
     return st_info != nullptr ? st_info->GetSupportNLPISwitch() : false;
 }
 
-bool ResourceManager::IsLPISupported() {
-
-    std::shared_ptr<SoundTriggerPlatformInfo> st_info =
-                             SoundTriggerPlatformInfo::GetInstance();
-    return st_info != nullptr ? st_info->GetLpiEnable() : false;
-}
-
 bool ResourceManager::IsDedicatedBEForUPDEnabled()
 {
     return ResourceManager::isUpdDedicatedBeEnabled;
@@ -4753,18 +4738,63 @@ bool ResourceManager::IsHapticsThroughWSA()
 
 }
 
+void ResourceManager::registerNLPIStream(Stream *s)
+{
+    std::lock_guard<std::mutex> lck(mResourceManagerMutex);
+    PAL_DBG(LOG_TAG, "register NLPI stream: %pK", s);
+    mNLPIStreams.insert(s);
+}
+
+void ResourceManager::deregisterNLPIStream(Stream *s)
+{
+    std::lock_guard<std::mutex> lck(mResourceManagerMutex);
+    PAL_DBG(LOG_TAG, "deregister NLPI stream: %pK", s);
+    mNLPIStreams.erase(s);
+}
+
+bool ResourceManager::isStStream(pal_stream_type_t type)
+{
+    switch (type) {
+        case PAL_STREAM_VOICE_UI:
+        case PAL_STREAM_ACD:
+        case PAL_STREAM_ASR:
+        case PAL_STREAM_SENSOR_PCM_DATA:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool ResourceManager::getLPIUsage()
+{
+    int status  = 0;
+    bool nlpi_active = false;
+
+    /*
+     * Here using try lock is because in UpdateSoundTriggerCaptureProfile,
+     * it can hold rm lock and call GetCurrentCaptureProfile of each stream,
+     * in which getLPIUsage can be invoked, which need to hold rm lock again.
+     */
+    status  = mResourceManagerMutex.try_lock();
+    if (mNLPIStreams.size() > 0)
+        nlpi_active = true;
+
+    if (status)
+        mResourceManagerMutex.unlock();
+
+    return !nlpi_active && use_lpi_;
+}
+
 void ResourceManager::GetSoundTriggerConcurrencyCount(
-    pal_stream_type_t type,
-    int32_t *enable_count, int32_t *disable_count) {
+    pal_stream_type_t type, int32_t *disable_count) {
     mActiveStreamMutex.lock();
-    GetSoundTriggerConcurrencyCount_l(type, enable_count, disable_count);
+    GetSoundTriggerConcurrencyCount_l(type, disable_count);
     mActiveStreamMutex.unlock();
 }
 
 // this should only be called when LPI supported by platform
 void ResourceManager::GetSoundTriggerConcurrencyCount_l(
-    pal_stream_type_t type,
-    int32_t *enable_count, int32_t *disable_count) {
+    pal_stream_type_t type, int32_t *disable_count) {
 
     pal_stream_attributes st_attr;
     bool voice_conc_enable = IsVoiceCallConcurrencySupported();
@@ -4774,24 +4804,19 @@ void ResourceManager::GetSoundTriggerConcurrencyCount_l(
     bool low_latency_bargein_enable = IsLowLatencyBargeinSupported();
 
     if (type == PAL_STREAM_ACD) {
-        *enable_count = ACDConcurrencyEnableCount;
         *disable_count = ACDConcurrencyDisableCount;
     } else if (type == PAL_STREAM_VOICE_UI) {
-        *enable_count = concurrencyEnableCount;
         *disable_count = concurrencyDisableCount;
     } else if (type == PAL_STREAM_ASR) {
-        *enable_count = ASRConcurrencyEnableCount;
         *disable_count = ASRConcurrencyDisableCount;
     } else if (type == PAL_STREAM_SENSOR_PCM_DATA) {
-        *enable_count = SNSPCMDataConcurrencyEnableCount;
         *disable_count = SNSPCMDataConcurrencyDisableCount;
     } else {
         PAL_ERR(LOG_TAG, "Error:%d Invalid stream type %d", -EINVAL, type);
         return;
     }
 
-    PAL_INFO(LOG_TAG, "conc enable cnt %d, conc disable count %d",
-        *enable_count, *disable_count);
+    PAL_INFO(LOG_TAG, "conc disable count %d", *disable_count);
 }
 
 bool ResourceManager::IsLowLatencyBargeinSupported() {
@@ -5499,21 +5524,28 @@ int ResourceManager::StartOtherDetectionStreams(void *st) {
     return 0;
 }
 
-void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
-                         pal_stream_type_t in_type, pal_stream_direction_t dir,
+void ResourceManager::GetConcurrencyInfo(Stream* s, bool active,
                          bool *rx_conc, bool *tx_conc, bool *conc_en)
 {
+    int32_t status  = 0;
     bool voice_conc_enable = IsVoiceCallConcurrencySupported();
     bool voip_conc_enable = IsVoipConcurrencySupported();
     bool low_latency_bargein_enable = IsLowLatencyBargeinSupported();
     bool audio_capture_conc_enable = IsAudioCaptureConcurrencySupported();
+    struct pal_stream_attributes sAttr = {};
 
-    if (dir == PAL_AUDIO_OUTPUT) {
-        if (in_type == PAL_STREAM_LOW_LATENCY && !low_latency_bargein_enable) {
+    status = s->getStreamAttributes(&sAttr);
+    if (status) {
+        PAL_ERR(LOG_TAG, "stream get attributes failed");
+        return;
+    }
+
+    if (sAttr.direction == PAL_AUDIO_OUTPUT) {
+        if (sAttr.type == PAL_STREAM_LOW_LATENCY && !low_latency_bargein_enable) {
             PAL_VERBOSE(LOG_TAG, "Ignore low latency playback stream");
-        } else if (in_type == PAL_STREAM_SENSOR_PCM_RENDERER) {
+        } else if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER) {
             PAL_VERBOSE(LOG_TAG, "Ignore sensor renderer stream");
-        } else if (in_type == PAL_STREAM_HAPTICS) {
+        } else if (sAttr.type == PAL_STREAM_HAPTICS) {
             PAL_VERBOSE(LOG_TAG, "Ignore haptics stream");
         } else {
             *rx_conc = true;
@@ -5529,31 +5561,35 @@ void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
      * and voice call should also be disabled even voice_conc_enable
      * or voip_conc_enable is set to true.
      */
-    if (in_type == PAL_STREAM_VOICE_CALL) {
+    if (sAttr.type == PAL_STREAM_VOICE_CALL) {
         *tx_conc = true;
         *rx_conc = true;
         if (!audio_capture_conc_enable || !voice_conc_enable) {
             PAL_DBG(LOG_TAG, "pause on voice concurrency");
             *conc_en = false;
         }
-    } else if (in_type == PAL_STREAM_VOIP_TX) {
+    } else if (sAttr.type == PAL_STREAM_VOIP_TX) {
         *tx_conc = true;
         if (!audio_capture_conc_enable || !voip_conc_enable) {
             PAL_DBG(LOG_TAG, "pause on voip concurrency");
             *conc_en = false;
         }
-    } else if (dir == PAL_AUDIO_INPUT &&
-               (in_type != PAL_STREAM_ACD &&
-                in_type != PAL_STREAM_SENSOR_PCM_DATA &&
-                in_type != PAL_STREAM_CONTEXT_PROXY  &&
-                in_type != PAL_STREAM_VOICE_UI &&
-                in_type != PAL_STREAM_ASR)) {
+    } else if (sAttr.type == PAL_STREAM_ACD ||
+               sAttr.type == PAL_STREAM_SENSOR_PCM_DATA ||
+               sAttr.type == PAL_STREAM_VOICE_UI ||
+               sAttr.type == PAL_STREAM_ASR) {
+        if (!s->ConfigSupportLPI()) {
+            *tx_conc = true;
+            PAL_DBG(LOG_TAG, "ST stream type: %d is in NLPI", sAttr.type);
+        }
+    } else if (sAttr.direction == PAL_AUDIO_INPUT &&
+               sAttr.type != PAL_STREAM_CONTEXT_PROXY) {
         *tx_conc = true;
-        if (!audio_capture_conc_enable && in_type != PAL_STREAM_PROXY) {
+        if (!audio_capture_conc_enable && sAttr.type != PAL_STREAM_PROXY) {
             PAL_DBG(LOG_TAG, "pause on audio capture concurrency");
             *conc_en = false;
         }
-    } else if (in_type == PAL_STREAM_LOOPBACK){
+    } else if (sAttr.type == PAL_STREAM_LOOPBACK){
         *tx_conc = true;
         *rx_conc = true;
         if (!audio_capture_conc_enable) {
@@ -5563,7 +5599,7 @@ void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
     }
 
     PAL_INFO(LOG_TAG, "stream type %d Tx conc %d, Rx conc %d, concurrency%s allowed",
-        in_type, *tx_conc, *rx_conc, *conc_en? "" : " not");
+        sAttr.type, *tx_conc, *rx_conc, *conc_en? "" : " not");
 }
 
 void ResourceManager::HandleStreamPauseResume(pal_stream_type_t st_type, bool active)
@@ -5822,15 +5858,13 @@ bool ResourceManager::isAnyVUIStreamBuffering()
     return false;
 }
 
-void ResourceManager::ConcurrentStreamStatus(pal_stream_type_t type,
-                                             pal_stream_direction_t dir,
+void ResourceManager::ConcurrentStreamStatus(Stream* s,
                                              bool active)
 {
-    HandleConcurrencyForSoundTriggerStreams(type, dir, active);
+    HandleConcurrencyForSoundTriggerStreams(s, active);
 }
 
-void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t type,
-                                                             pal_stream_direction_t dir,
+void ResourceManager::HandleConcurrencyForSoundTriggerStreams(Stream* s,
                                                              bool active)
 {
     std::vector<pal_stream_type_t> st_streams;
@@ -5838,14 +5872,53 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
     bool use_lpi_temp = use_lpi_;
     bool st_stream_conc_en = true;
     bool notify_resources_available = false;
+    bool st_stream_tx_conc = false;
+    bool st_stream_rx_conc = false;
 
     mActiveStreamMutex.lock();
-    PAL_DBG(LOG_TAG, "Enter, stream type %d, direction %d, active %d", type, dir, active);
+    PAL_DBG(LOG_TAG, "Enter, stream: %pK, active %d", s, active);
 
     if (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) {
         use_lpi_temp = false;
     } else if (deferredSwitchState == DEFER_NLPI_LPI_SWITCH) {
         use_lpi_temp = true;
+    }
+
+    GetConcurrencyInfo(s, active, &st_stream_rx_conc, &st_stream_tx_conc, &st_stream_conc_en);
+
+    if (st_stream_rx_conc || st_stream_tx_conc) {
+        if (active)
+            registerNLPIStream(s);
+        else
+            deregisterNLPIStream(s);
+    }
+
+    if (st_stream_tx_conc) {
+        if (active)
+            TxconcurrencyEnableCount++;
+        else if (TxconcurrencyEnableCount > 0)
+            TxconcurrencyEnableCount--;
+    }
+
+    if (st_stream_conc_en && (st_stream_rx_conc || st_stream_tx_conc)) {
+        if (!isNLPISwitchSupported()) {
+            PAL_INFO(LOG_TAG,
+                     "Skip switch as st stream LPI/NLPI switch disabled");
+        } else if (active) {
+            if (mNLPIStreams.size() > 0) {
+                if (use_lpi_temp) {
+                    do_st_stream_switch = true;
+                    use_lpi_temp = false;
+                }
+            }
+        } else {
+            if (mNLPIStreams.size() == 0) {
+                if (!(active_streams_st.size() && charging_state_ && IsTransitToNonLPIOnChargingSupported())) {
+                    do_st_stream_switch = true;
+                    use_lpi_temp = true;
+                }
+            }
+        }
     }
 
     st_streams.push_back(PAL_STREAM_VOICE_UI);
@@ -5854,62 +5927,13 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
     st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
 
     for (pal_stream_type_t st_stream_type : st_streams) {
-        bool st_stream_tx_conc = false;
-        bool st_stream_rx_conc = false;
-
-        GetConcurrencyInfo(st_stream_type, type, dir,
-                           &st_stream_rx_conc, &st_stream_tx_conc, &st_stream_conc_en);
-
         if (!st_stream_conc_en) {
             if (st_stream_type == PAL_STREAM_VOICE_UI &&
                 concurrencyDisableCount == 1 && !active)
                 notify_resources_available = true;
             HandleStreamPauseResume(st_stream_type, active);
-            continue;
-        }
-        if (st_stream_tx_conc) {
-            if (active)
-                TxconcurrencyEnableCount++;
-            else if (TxconcurrencyEnableCount > 0)
-                TxconcurrencyEnableCount--;
-        }
-        if (st_stream_conc_en && (st_stream_tx_conc || st_stream_rx_conc)) {
-            if (!IsLPISupported() || !isNLPISwitchSupported()) {
-                PAL_INFO(LOG_TAG,
-                         "Skip switch as st_stream %d LPI disabled/NLPI switch disabled", st_stream_type);
-            } else if (active) {
-                if ((PAL_STREAM_VOICE_UI == st_stream_type && ++concurrencyEnableCount == 1) ||
-                    (PAL_STREAM_ACD == st_stream_type && ++ACDConcurrencyEnableCount == 1) ||
-                    (PAL_STREAM_ASR == st_stream_type && ++ASRConcurrencyEnableCount == 1) ||
-                    (PAL_STREAM_SENSOR_PCM_DATA == st_stream_type && ++SNSPCMDataConcurrencyEnableCount == 1)) {
-                    if (use_lpi_temp) {
-                        do_st_stream_switch = true;
-                        use_lpi_temp = false;
-                    }
-                }
-            } else {
-                if ((PAL_STREAM_VOICE_UI == st_stream_type && --concurrencyEnableCount == 0) ||
-                    (PAL_STREAM_ACD == st_stream_type && --ACDConcurrencyEnableCount == 0) ||
-                    (PAL_STREAM_ASR == st_stream_type && --ASRConcurrencyEnableCount == 0) ||
-                    (PAL_STREAM_SENSOR_PCM_DATA == st_stream_type && --SNSPCMDataConcurrencyEnableCount == 0)) {
-                    if (!(active_streams_st.size() && charging_state_ && IsTransitToNonLPIOnChargingSupported())) {
-                        do_st_stream_switch = true;
-                        use_lpi_temp = true;
-                    }
-                }
-            }
         }
     }
-
-    /* Reset enable counts to 0 if they are negative */
-    if (concurrencyEnableCount < 0)
-        concurrencyEnableCount = 0;
-    if (ACDConcurrencyEnableCount < 0)
-        ACDConcurrencyEnableCount = 0;
-    if (ASRConcurrencyEnableCount < 0)
-        ASRConcurrencyEnableCount = 0;
-    if (SNSPCMDataConcurrencyEnableCount < 0)
-        SNSPCMDataConcurrencyEnableCount = 0;
 
     if (do_st_stream_switch) {
         if (checkAndUpdateDeferSwitchState(active)) {
@@ -12302,7 +12326,7 @@ void ResourceManager::onChargingStateChange()
     bool need_switch = false;
     bool use_lpi_temp = false;
 
-    // no need to handle car mode if no Voice Stream exists
+    // no need to handle car mode if no VoiceUI Stream exists
     if (active_streams_st.size() == 0)
         return;
 
@@ -12310,7 +12334,7 @@ void ResourceManager::onChargingStateChange()
         use_lpi_temp = false;
         need_switch = true;
     } else if (!charging_state_ && !use_lpi_) {
-        if (!concurrencyEnableCount) {
+        if (!mNLPIStreams.size()) {
             use_lpi_temp = true;
             need_switch = true;
         }
@@ -12365,7 +12389,7 @@ void ResourceManager::onVUIStreamDeregistered()
     if (active_streams_sensor_pcm_data.size())
         st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
 
-    if (!use_lpi_ && !concurrencyEnableCount) {
+    if (!use_lpi_ && !mNLPIStreams.size()) {
         use_lpi_ = true;
         handleConcurrentStreamSwitch(st_streams);
     }

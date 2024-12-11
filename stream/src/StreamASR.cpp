@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -68,6 +68,7 @@ StreamASR::StreamASR(struct pal_stream_attributes *sattr,
     engine = nullptr;
     rxEcDev = nullptr;
     enableEc = false;
+    concNotified = false;
     stateToRestore = ASR_STATE_NONE;
 
     mVolumeData = (struct pal_volume_data *)malloc(sizeof(struct pal_volume_data)
@@ -168,7 +169,7 @@ int32_t StreamASR::close()
 
     PAL_INFO(LOG_TAG, "Enter, stream direction %d", mStreamAttr->direction);
 
-    std::lock_guard<std::mutex> lck(mStreamMutex);
+    mStreamMutex.lock();
 
     if (recConfig) {
         free(recConfig);
@@ -190,6 +191,12 @@ int32_t StreamASR::close()
     }
 
     palStateEnqueue(this, PAL_STATE_CLOSED, status);
+    mStreamMutex.unlock();
+
+    if (concNotified) {
+        rm->ConcurrentStreamStatus(this, false);
+        concNotified = false;
+    }
     PAL_INFO(LOG_TAG, "Exit, status %d", status);
     return status;
 }
@@ -264,7 +271,7 @@ int32_t StreamASR::setParameters(uint32_t paramId, void *payload)
         return status;
     }
 
-    std::lock_guard<std::mutex> lck(mStreamMutex);
+    mStreamMutex.lock();
     switch (paramId) {
         case PAL_PARAM_ID_ASR_MODEL: {
             PAL_VERBOSE(LOG_TAG, "Currently model loading is not supported");
@@ -290,6 +297,12 @@ int32_t StreamASR::setParameters(uint32_t paramId, void *payload)
             PAL_ERR(LOG_TAG, "Error:%d Unsupported param %u", status, paramId);
             break;
         }
+    }
+
+    mStreamMutex.unlock();
+    if (!status && paramId == PAL_PARAM_ID_ASR_CONFIG) {
+        rm->ConcurrentStreamStatus(this, true);
+        concNotified = true;
     }
 
     PAL_INFO(LOG_TAG, "Exit, status %d", status);
@@ -418,7 +431,7 @@ std::shared_ptr<CaptureProfile> StreamASR::GetCurrentCaptureProfile()
         inputMode = ST_INPUT_MODE_HEADSET;
 
     if (!UseLpiCaptureProfile())
-        rm->setForceNLPI(true);
+        rm->registerNLPIStream(this);
 
     if (rm->getLPIUsage())
         operatingMode = ST_OPERATING_MODE_LOW_POWER;
@@ -585,7 +598,7 @@ int32_t StreamASR::SetupDetectionEngine()
     if (rm->getLPIUsage() &&
         !UseLpiCaptureProfile()) {
         mStreamMutex.unlock();
-        rm->setForceNLPI(true);
+        rm->registerNLPIStream(this);
         rm->forceSwitchSoundTriggerStreams(true);
         mStreamMutex.lock();
     }
@@ -938,7 +951,7 @@ int32_t StreamASR::ASRActive::ProcessEvent(
         case ASR_EV_STOP_SPEECH_RECOGNITION: {
             bool backendUpdate = false;
 
-            rm->setForceNLPI(false);
+            rm->deregisterNLPIStream(&asrStream);
 
             backendUpdate = asrStream.rm->UpdateSoundTriggerCaptureProfile(
                                              &asrStream, false);
@@ -1387,4 +1400,13 @@ int32_t StreamASR::isBitWidthSupported(uint32_t bitWidth) {
             break;
     }
     return rc;
+}
+
+bool StreamASR::ConfigSupportLPI() {
+    if (!smCfg) {
+        PAL_ERR(LOG_TAG, "stream config not available, return LPI by default");
+        return true;
+    }
+
+    return smCfg->GetStreamLPIFlag();
 }

@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -551,10 +551,9 @@ protected:
     bool charging_state_;
     bool is_charger_online_;
     bool is_concurrent_boost_state_;
-    bool use_lpi_;
+    bool use_lpi_ = true;
     bool current_concurrent_state_;
     bool is_ICL_config_;
-    bool force_nlpi_ = false;
     pal_speaker_rotation_type rotation_type_;
     bool isDeviceSwitch = false;
     static std::mutex mResourceManagerMutex;
@@ -619,13 +618,9 @@ protected:
     uint64_t in_stream_instances[PAL_STREAM_MAX];
     static int mixerEventRegisterCount;
     static int TxconcurrencyEnableCount;
-    static int concurrencyEnableCount;
     static int concurrencyDisableCount;
-    static int ACDConcurrencyEnableCount;
     static int ACDConcurrencyDisableCount;
-    static int ASRConcurrencyEnableCount;
     static int ASRConcurrencyDisableCount;
-    static int SNSPCMDataConcurrencyEnableCount;
     static int SNSPCMDataConcurrencyDisableCount;
     static defer_switch_state_t deferredSwitchState;
     static int wake_lock_fd;
@@ -661,6 +656,7 @@ protected:
     static std::vector<int> spViChannelMapCfg;
     std::map<int, bool> PCMDataInstances;
     std::unordered_map<int, pal_stream_handle_t *> mStCaptureInfo;
+    std::set<Stream*> mNLPIStreams;
 
 public:
     ~ResourceManager();
@@ -917,7 +913,9 @@ public:
     const std::string getPALDeviceName(const pal_device_id_t id) const;
     bool isNonALSACodec(const struct pal_device *device) const;
     bool isNLPISwitchSupported();
-    bool IsLPISupported();
+    bool isStStream(pal_stream_type_t type);
+    void registerNLPIStream(Stream* s);
+    void deregisterNLPIStream(Stream* s);
     bool IsLowLatencyBargeinSupported();
     bool IsAudioCaptureConcurrencySupported();
     bool IsVoiceCallConcurrencySupported();
@@ -928,15 +926,14 @@ public:
     bool IsVirtualPortForUPDEnabled();
     uint32_t getHapticsPriority();
     bool IsHapticsThroughWSA();
-    void GetSoundTriggerConcurrencyCount(pal_stream_type_t type, int32_t *enable_count, int32_t *disable_count);
-    void GetSoundTriggerConcurrencyCount_l(pal_stream_type_t type, int32_t *enable_count, int32_t *disable_count);
+    void GetSoundTriggerConcurrencyCount(pal_stream_type_t type, int32_t *disable_count);
+    void GetSoundTriggerConcurrencyCount_l(pal_stream_type_t type, int32_t *disable_count);
     bool GetChargingState() const { return charging_state_; }
     bool getChargerOnlineState(void) const { return is_charger_online_; }
     bool getConcurrentBoostState(void) const { return is_concurrent_boost_state_; }
-    bool getLPIUsage() const { return use_lpi_ && !force_nlpi_; }
+    bool getLPIUsage();
     bool getInputCurrentLimitorConfigStatus(void) const { return is_ICL_config_; }
     bool CheckForForcedTransitToNonLPI();
-    void setForceNLPI(bool enable) { force_nlpi_ = enable; }
     void GetVoiceUIProperties(struct pal_st_properties *qstp);
     int HandleDetectionStreamAction(pal_stream_type_t type, int32_t action, void *data);
     void HandleStreamPauseResume(pal_stream_type_t st_type, bool active);
@@ -964,15 +961,10 @@ public:
     int handleMixerEvent(struct mixer *mixer, char *mixer_str);
     int StopOtherDetectionStreams(void *st);
     int StartOtherDetectionStreams(void *st);
-    void GetConcurrencyInfo(pal_stream_type_t st_type,
-                         pal_stream_type_t in_type, pal_stream_direction_t dir,
+    void GetConcurrencyInfo(Stream* s, bool active,
                          bool *rx_conc, bool *tx_conc, bool *conc_en);
-    void ConcurrentStreamStatus(pal_stream_type_t type,
-                                pal_stream_direction_t dir,
-                                bool active);
-    void HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t type,
-                                pal_stream_direction_t dir,
-                                bool active);
+    void ConcurrentStreamStatus(Stream* s, bool active);
+    void HandleConcurrencyForSoundTriggerStreams(Stream* s, bool active);
     bool isAnyVUIStreamBuffering();
     bool isTxConcurrencyActive() { return (TxconcurrencyEnableCount > 0); }
     void handleDeferredSwitch();

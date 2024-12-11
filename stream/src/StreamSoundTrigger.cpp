@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -69,7 +69,6 @@ StreamSoundTrigger::StreamSoundTrigger(struct pal_stream_attributes *sattr,
                                        std::shared_ptr<ResourceManager> rm) {
 
     class SoundTriggerUUID uuid;
-    int32_t enable_concurrency_count = 0;
     int32_t disable_concurrency_count = 0;
     reader_ = nullptr;
     detection_state_ = ENGINE_IDLE;
@@ -99,6 +98,7 @@ StreamSoundTrigger::StreamSoundTrigger(struct pal_stream_attributes *sattr,
     vui_intf_ = nullptr;
     sm_cfg_ = nullptr;
     ec_rx_dev_ = nullptr;
+    concNotified = false;
     mDevices.clear();
 
     // Setting default volume to unity
@@ -186,8 +186,7 @@ StreamSoundTrigger::StreamSoundTrigger(struct pal_stream_attributes *sattr,
         vui_ptfm_info_->GetConcurrentVoipCallEnable());
 
     // check concurrency count from rm
-    rm->GetSoundTriggerConcurrencyCount(PAL_STREAM_VOICE_UI, &enable_concurrency_count,
-        &disable_concurrency_count);
+    rm->GetSoundTriggerConcurrencyCount(PAL_STREAM_VOICE_UI, &disable_concurrency_count);
 
     /*
      * When voice/voip/record is active and concurrency is not
@@ -294,6 +293,12 @@ int32_t StreamSoundTrigger::close() {
 
     currentState = STREAM_IDLE;
     palStateEnqueue(this, PAL_STATE_CLOSED, status);
+    lck.unlock();
+
+    if (concNotified) {
+        rm->ConcurrentStreamStatus(this, false);
+        concNotified = false;
+    }
     PAL_DBG(LOG_TAG, "Exit, status %d", status);
     return status;
 }
@@ -551,7 +556,7 @@ int32_t StreamSoundTrigger::setParameters(uint32_t param_id, void *payload) {
 
     PAL_DBG(LOG_TAG, "Enter, param id %d", param_id);
 
-    std::lock_guard<std::mutex> lck(mStreamMutex);
+    mStreamMutex.lock();
     switch (param_id) {
         case PAL_PARAM_ID_LOAD_SOUND_MODEL: {
             std::shared_ptr<StEventConfig> ev_cfg(
@@ -588,6 +593,12 @@ int32_t StreamSoundTrigger::setParameters(uint32_t param_id, void *payload) {
             PAL_ERR(LOG_TAG, "Unsupported param %u", param_id);
             break;
         }
+    }
+    mStreamMutex.unlock();
+
+    if (!status && param_id == PAL_PARAM_ID_LOAD_SOUND_MODEL) {
+        rm->ConcurrentStreamStatus(this, true);
+        concNotified = true;
     }
 
     PAL_DBG(LOG_TAG, "Exit, status %d", status);
@@ -3751,7 +3762,8 @@ bool StreamSoundTrigger::ConfigSupportLPI() {
         config_support_lpi =
                sm_cfg_->GetVUIFirstStageConfig(model_type_)->IsLpiSupported();
 
-    if (!config_support_lpi || !vui_ptfm_info_->GetLpiEnable())
+    if (!config_support_lpi ||
+        (sm_cfg_ && !sm_cfg_->GetStreamLPIFlag()))
         lpi = false;
 
     return lpi;

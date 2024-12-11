@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -150,6 +150,7 @@ class StreamASR : public Stream {
     param_id_asr_config_t* GetSpeechConfig() { return recConfig;}
     param_id_asr_output_config_t* GetOutputConfig() { return outputConfig; }
     param_id_asr_input_threshold_t* GetInputBufConfig() { return inputConfig; }
+    bool ConfigSupportLPI() override;
 
  private:
     class ASREventData {
@@ -421,5 +422,6 @@ class StreamASR : public Stream {
 
     std::map<uint32_t, ASRState*> asrStates;
     std::condition_variable cv;
+    bool concNotified;
 };
 #endif // STREAMASR_H_

@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -47,7 +47,6 @@ StreamACD::StreamACD(struct pal_stream_attributes *sattr,
                                        uint32_t no_of_modifiers __unused,
                                        std::shared_ptr<ResourceManager> rm)
 {
-    int32_t enable_concurrency_count = 0;
     int32_t disable_concurrency_count = 0;
 
     rec_config_ = nullptr;
@@ -67,6 +66,7 @@ StreamACD::StreamACD(struct pal_stream_attributes *sattr,
     cookie_ = 0;
     cur_state_ = nullptr;
     prev_state_ = nullptr;
+    concNotified = false;
     state_for_restore_ = ACD_STATE_NONE;
 
     // Setting default volume to unity
@@ -146,8 +146,7 @@ StreamACD::StreamACD(struct pal_stream_attributes *sattr,
         acd_info_->GetConcurrentVoipCallEnable());
 
     // check concurrency count from rm
-    rm->GetSoundTriggerConcurrencyCount(PAL_STREAM_ACD, &enable_concurrency_count,
-        &disable_concurrency_count);
+    rm->GetSoundTriggerConcurrencyCount(PAL_STREAM_ACD, &disable_concurrency_count);
 
     /*
      * When voice/voip/record is active and concurrency is not
@@ -207,7 +206,7 @@ int32_t StreamACD::close()
 
     PAL_DBG(LOG_TAG, "Enter, stream direction %d", mStreamAttr->direction);
 
-    std::lock_guard<std::mutex> lck(mStreamMutex);
+    mStreamMutex.lock();
 
     std::shared_ptr<ACDEventConfig> ev_cfg(new ACDUnloadEventConfig());
     status = cur_state_->ProcessEvent(ev_cfg);
@@ -226,7 +225,15 @@ int32_t StreamACD::close()
         free(cached_event_data_);
         cached_event_data_ = nullptr;
     }
+
     palStateEnqueue(this, PAL_STATE_CLOSED, status);
+    mStreamMutex.unlock();
+
+    if (concNotified) {
+        rm->ConcurrentStreamStatus(this, false);
+        concNotified = false;
+    }
+
     PAL_DBG(LOG_TAG, "Exit, status %d", status);
     return status;
 }
@@ -333,7 +340,7 @@ int32_t StreamACD::setParameters(uint32_t param_id, void *payload)
 
     PAL_DBG(LOG_TAG, "Enter, param id %d", param_id);
 
-    std::lock_guard<std::mutex> lck(mStreamMutex);
+    mStreamMutex.lock();
     switch (param_id) {
     case PAL_PARAM_ID_LOAD_SOUND_MODEL: {
         std::shared_ptr<ACDEventConfig> ev_cfg(
@@ -364,6 +371,14 @@ int32_t StreamACD::setParameters(uint32_t param_id, void *payload)
           PAL_ERR(LOG_TAG, "Error:%d Unsupported param %u", status, param_id);
           break;
       }
+    }
+    mStreamMutex.unlock();
+
+    if (!status &&
+        (param_id == PAL_PARAM_ID_LOAD_SOUND_MODEL ||
+        param_id == PAL_PARAM_ID_CONTEXT_LIST)) {
+        rm->ConcurrentStreamStatus(this, true);
+        concNotified = true;
     }
 
     PAL_DBG(LOG_TAG, "Exit, status %d", status);
@@ -1922,6 +1937,15 @@ int32_t StreamACD::ACDSSR::ProcessEvent(std::shared_ptr<ACDEventConfig> ev_cfg)
     PAL_DBG(LOG_TAG, "Exit: ACDSSR: event %d handled", ev_cfg->id_);
 
     return status;
+}
+
+bool StreamACD::ConfigSupportLPI() {
+    if (!sm_cfg_) {
+        PAL_ERR(LOG_TAG, "stream config not available, return LPI by default");
+        return true;
+    }
+
+    return sm_cfg_->GetStreamLPIFlag();
 }
 
 int32_t StreamACD::ssrDownHandler() {
