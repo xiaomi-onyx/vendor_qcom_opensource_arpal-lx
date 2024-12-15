@@ -1594,7 +1594,8 @@ int ResourceManager::init_audio()
                     strstr(snd_card_name, "bengal") ||
                     strstr(snd_card_name, "monaco") ||
                     strstr(snd_card_name, "sun") ||
-                    strstr(snd_card_name, "tuna")) {
+                    strstr(snd_card_name, "tuna") ||
+                    strstr(snd_card_name, "kera")) {
                     PAL_VERBOSE(LOG_TAG, "Found Codec sound card");
                     snd_card_found = true;
                     audio_hw_mixer = tmp_mixer;
@@ -4207,6 +4208,7 @@ int ResourceManager::getECEnableSetting(std::shared_ptr<Device> tx_dev,
     pal_device_id_t deviceId;
     std::string key = "";
     struct pal_stream_attributes curStrAttr;
+    PAL_DBG(TAG_LOG," : Enter");
 
     if (tx_dev == nullptr || ec_enable == nullptr || streamHandle == nullptr) {
         PAL_ERR(LOG_TAG, "invalid input");
@@ -4227,6 +4229,10 @@ int ResourceManager::getECEnableSetting(std::shared_ptr<Device> tx_dev,
 
     PAL_DBG(TAG_LOG, "stream type: %d, deviceid: %d, custom key: %s",
                       curStrAttr.type, deviceId, key.c_str());
+    if (deviceInfo.empty()) {
+        PAL_ERR(LOG_TAG, "deviceInfo empty");
+        goto exit;
+    }
     for (auto devInfo : deviceInfo) {
         if (deviceId != devInfo.deviceId)
             continue;
@@ -5530,8 +5536,6 @@ void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
             PAL_DBG(LOG_TAG, "pause on LOOPBACK concurrency");
             *conc_en = false;
         }
-    } else if (in_type == PAL_STREAM_ULTRASOUND){
-        *rx_conc = true;
     }
 
     PAL_INFO(LOG_TAG, "stream type %d Tx conc %d, Rx conc %d, concurrency%s allowed",
@@ -5658,7 +5662,7 @@ bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
      *    and exit the sleep in voiceUIDeferredSwitchLoop.
      */
     if (!stream_active) {
-        if (IsLowLatencyBargeinSupported()) {
+        if (IsLowLatencyBargeinSupported() && active_streams_st.size()) {
             deferredSwitchState =
                 (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) ? NO_DEFER :
                  DEFER_NLPI_LPI_SWITCH;
@@ -11286,7 +11290,7 @@ int ResourceManager::setParameter(uint32_t param_id, void *param_payload,
             struct pal_device dattr;
             pal_param_bta2dp_t *current_param_bt_a2dp = nullptr;
             pal_param_bta2dp_t param_bt_a2dp;
-            int retrycnt = 20;
+            int retrycnt = 3;
             const int retryPeriodMs = 100;
 
             if (isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
@@ -12755,15 +12759,6 @@ bool ResourceManager::isDeviceAvailable(
     }
 
     return isAvailable;
-}
-
-bool ResourceManager::isDisconnectedDeviceStillActive(
-    std::set<pal_device_id_t> &curPalDevices, std::set<pal_device_id_t> &activeDevices,
-    pal_device_id_t id)
-{
-    return (!isDeviceAvailable(id)) &&
-        (curPalDevices.find(id) != curPalDevices.end()) &&
-        (activeDevices.find(id) != activeDevices.end());
 }
 
 bool ResourceManager::isDeviceReady(pal_device_id_t id)
@@ -14365,6 +14360,13 @@ bool ResourceManager::doDevAttrDiffer(struct pal_device *inDevAttr,
                 PAL_ERR(LOG_TAG, "get A2DP force device switch device parameter failed");
             }
         }
+    }
+
+    // For sco devices, current dev attr is priority, dont restore to
+    // previous attributes
+    if (isBtScoDevice(inDevAttr->id) && isBtScoDevice(curDevAttr->id)) {
+        PAL_DBG(LOG_TAG, "skip restore for sco devices, always curr dev attr is priority");
+        ret = false;
     }
 
 exit:

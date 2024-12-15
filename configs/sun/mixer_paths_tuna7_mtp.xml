@@ -592,6 +592,10 @@
         <ctl name="WSA_RX0 Digital Volume" value="50" />
     </path>
 
+    <path name="handset-ultrasound">
+        <path name="ultrasound-handset" />
+    </path>
+
     <path name="ultrasound-handset-vbat">
         <path name="ultrasound-handset" />
         <ctl name="WSA_RX INT0 VBAT WSA RX0 VBAT Enable" value="1" />
@@ -600,6 +604,13 @@
     <path name="ultrasound-mic">
         <ctl name="TX_AIF2_CAP Mixer DEC4" value="1" />
         <ctl name="TX DMIC MUX4" value="DMIC2" />
+    </path>
+
+    <path name="ultrasound-dmic">
+        <ctl name="TX_AIF2_CAP Mixer DEC4" value="1" />
+        <ctl name="TX DMIC MUX4" value="DMIC2" />
+        <ctl name="TX_AIF2_CAP Mixer DEC4" value="1" />
+        <ctl name="TX DMIC MUX4" value="DMIC0" />
     </path>
 
     <path name="headphones">

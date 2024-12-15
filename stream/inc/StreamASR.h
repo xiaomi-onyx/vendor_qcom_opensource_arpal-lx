@@ -398,14 +398,16 @@ class StreamASR : public Stream {
     std::shared_ptr<ASRPlatformInfo> asrInfo;
     std::shared_ptr<CaptureProfile> capProf;
     std::shared_ptr<ASREngine> engine;
+    std::shared_ptr<Device> rxEcDev;
+    bool enableEc;
 
+    pal_stream_callback callback;
     struct pal_asr_config *palRecConfig;
     param_id_asr_config_t *recConfig;
     param_id_asr_output_config_t *outputConfig;
     param_id_asr_input_threshold_t *inputConfig;
-    bool                  paused;
-    bool                  deviceOpened;
-    pal_stream_callback callback;
+    bool                paused;
+    bool                deviceOpened;
     uint64_t            cookie;
 
     ASRState *asrIdle;
