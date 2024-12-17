@@ -544,6 +544,7 @@ protected:
     std::list <StreamContextProxy*> active_streams_context_proxy;
     std::list <StreamCommonProxy*> active_streams_afs;
     std::list <StreamSensorRenderer*> active_streams_sensor_renderer;
+    std::list <Stream*> mStartDeferredStreams;
     std::vector <std::pair<std::shared_ptr<Device>, Stream*>> active_devices;
     std::vector <std::shared_ptr<Device>> plugin_devices_;
     std::vector <pal_device_id_t> avail_devices_;
@@ -843,6 +844,8 @@ public:
     static void updateSpkrTempCtrls(int key, std::string value);
     static std::string getSpkrTempCtrl(int channel);
     static void updateBtSlimClockSrcMap(uint32_t key, uint32_t value);
+    void updateDeferredSTStreams(Stream* s, bool active);
+    defer_switch_state_t getSTDeferedSwitchState();
     static uint32_t getBtSlimClockSrc(uint32_t codecFormat);
     int getGainLevelMapping(struct pal_amp_db_and_gain_table *mapTbl, int tblSize);
 

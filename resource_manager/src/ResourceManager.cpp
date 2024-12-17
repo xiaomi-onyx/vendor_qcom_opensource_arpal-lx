@@ -4814,6 +4814,22 @@ bool ResourceManager::getLPIUsage()
     return !nlpi_active && use_lpi_;
 }
 
+defer_switch_state_t ResourceManager::getSTDeferedSwitchState()
+{
+
+    std::lock_guard<std::mutex> lck(mActiveStreamMutex);
+    return deferredSwitchState;
+}
+
+void ResourceManager::updateDeferredSTStreams(Stream* s, bool active)
+{
+    std::lock_guard<std::mutex> lck(mActiveStreamMutex);
+    if (active)
+        mStartDeferredStreams.push_back(s);
+    else
+        mStartDeferredStreams.remove(s);
+}
+
 void ResourceManager::GetSoundTriggerConcurrencyCount(
     pal_stream_type_t type, int32_t *disable_count) {
     mActiveStreamMutex.lock();
@@ -5844,7 +5860,7 @@ void ResourceManager::voiceUIDeferredSwitchLoop(std::shared_ptr<ResourceManager>
 void ResourceManager::handleDeferredSwitch()
 {
     int32_t status = 0;
-    bool active = false;
+    bool switch_to_nlpi = false;
     std::vector<pal_stream_type_t> st_streams;
     do {
         status = mActiveStreamMutex.try_lock();
@@ -5862,11 +5878,11 @@ void ResourceManager::handleDeferredSwitch()
 
     if (!isAnyVUIStreamBuffering() && deferredSwitchState != NO_DEFER) {
         if (deferredSwitchState == DEFER_LPI_NLPI_SWITCH)
-            active = true;
+            switch_to_nlpi = true;
         else if (deferredSwitchState == DEFER_NLPI_LPI_SWITCH)
-            active = false;
+            switch_to_nlpi = false;
 
-        use_lpi_ = !active;
+        use_lpi_ = !switch_to_nlpi;
 
         if (active_streams_st.size())
             st_streams.push_back(PAL_STREAM_VOICE_UI);
@@ -5880,6 +5896,18 @@ void ResourceManager::handleDeferredSwitch()
         handleConcurrentStreamSwitch(st_streams);
         // reset the defer switch state after handling LPI/NLPI switch
         deferredSwitchState = NO_DEFER;
+
+        // now start deferred NLPI ST streams which was not started
+        // previously due to LPI to NLPI switch deferred
+        if (switch_to_nlpi) {
+            for (auto it = mStartDeferredStreams.begin();
+                      it != mStartDeferredStreams.end(); it++) {
+                (*it)->lockStreamMutex();
+                (*it)->start_l();
+                (*it)->unlockStreamMutex();
+            }
+            mStartDeferredStreams.clear();
+        }
     }
     mActiveStreamMutex.unlock();
     PAL_DBG(LOG_TAG, "Exit");

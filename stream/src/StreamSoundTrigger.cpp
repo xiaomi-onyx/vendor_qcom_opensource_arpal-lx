@@ -318,10 +318,20 @@ void StreamSoundTrigger::UpdateCaptureHandleInfo(bool start) {
 }
 
 int32_t StreamSoundTrigger::start() {
-    int32_t status = 0;
-    stream_state_t prev_state;
+    int status = 0;
 
     PAL_DBG(LOG_TAG, "Enter, stream direction %d", mStreamAttr->direction);
+
+    /*
+     * If LPI to NLPI is deferred such as when another ST stream is buffering,
+     * and if this stream is configured to run in NLPI, defer start of the stream
+     * until the buffering is stopped.
+     */
+    if (!sm_cfg_->GetStreamLPIFlag() &&
+        (rm->getSTDeferedSwitchState() == DEFER_LPI_NLPI_SWITCH)) {
+        rm->updateDeferredSTStreams(this, true);
+        return status;
+    }
 
     /*
      * Guard with mActiveStreamMutex to avoid concurrent
@@ -329,6 +339,16 @@ int32_t StreamSoundTrigger::start() {
      */
     rm->lockActiveStream();
     std::lock_guard<std::mutex> lck(mStreamMutex);
+    status  = start_l();
+    rm->unlockActiveStream();
+
+    return status;
+}
+
+int32_t StreamSoundTrigger::start_l() {
+    int32_t status = 0;
+    stream_state_t prev_state;
+
     // cache current state after mutex locked
     prev_state = currentState;
     currentState = STREAM_STARTED;
@@ -344,7 +364,7 @@ int32_t StreamSoundTrigger::start() {
         UpdateCaptureHandleInfo(true);
     }
     palStateEnqueue(this, PAL_STATE_STARTED, status);
-    rm->unlockActiveStream();
+
     PAL_DBG(LOG_TAG, "Exit, status %d", status);
     return status;
 }
@@ -353,6 +373,16 @@ int32_t StreamSoundTrigger::stop() {
     int32_t status = 0;
 
     PAL_DBG(LOG_TAG, "Enter, stream direction %d", mStreamAttr->direction);
+
+    /*
+     * Remove stream from start deferred stream if it hasn't been
+     * scheduled yet. If it's already started during handling
+     * deferred stream, it can be removed there.
+     */
+    if (!sm_cfg_->GetStreamLPIFlag()) {
+        rm->updateDeferredSTStreams(this, false);
+        return status;
+    }
 
     /*
      * Guard with mActiveStreamMutex to avoid concurrent
