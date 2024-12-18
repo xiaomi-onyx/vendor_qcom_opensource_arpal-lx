@@ -569,6 +569,7 @@ bool ResourceManager::isUPDVirtualPortEnabled = false;
 bool ResourceManager::isCPEnabled = false;
 bool ResourceManager::isDummyDevEnabled = false;
 bool ResourceManager::isProxyRecordActive = false;
+bool ResourceManager::isPalSsrTriggerEnabled = false;
 pal_audio_event_callback ResourceManager::callback_event = nullptr;
 bool ResourceManager::isSilenceDetectionEnabledPcm = false;
 bool ResourceManager::isSilenceDetectionEnabledVoice = false;
@@ -9058,11 +9059,31 @@ int ResourceManager::setConfigParams(struct str_parms *parms)
     /* Not checking return value as this is optional */
     setLpiLoggingParams(parms, value, len);
 
+    setPalSsrTriggerParam(parms, value, len);
+
 exit:
     PAL_DBG(LOG_TAG,"Exit, status %d", ret);
     if(value != NULL)
         free(value);
     return ret;
+}
+
+void ResourceManager::setPalSsrTriggerParam(struct str_parms *parms,
+                                         char *value, int len)
+{
+     int ret = -EINVAL;
+
+     if (!value || !parms)
+         return;
+
+     ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_PAL_SSR_TRIGGER_ENABLE,
+                                 value, len);
+     if (ret >= 0) {
+         if (value && !strncmp(value, "true", sizeof("true")))
+             isPalSsrTriggerEnabled = true;
+
+         str_parms_del(parms, AUDIO_PARAMETER_KEY_PAL_SSR_TRIGGER_ENABLE);
+     }
 }
 
 int ResourceManager::setLpiLoggingParams(struct str_parms *parms,
