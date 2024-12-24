@@ -198,6 +198,7 @@ public:
         else
             return nullptr;
     }
+    bool isLPIProfile();
 
     std::vector<PalRingBufferReader *> GetReaders() { return reader_list_;}
 
