@@ -14603,6 +14603,7 @@ void ResourceManager::reconfigureScoStreams() {
     std::vector <std::tuple<Stream*, struct pal_device *>> streamDevConnect;
     std::vector <pal_device *> palDevices;
     struct pal_device *dattr = nullptr;
+    std::vector <Stream *> reconfigureStreams;
 
     scoDevs.push_back(PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET);
     scoDevs.push_back(PAL_DEVICE_OUT_BLUETOOTH_SCO);
@@ -14622,14 +14623,22 @@ void ResourceManager::reconfigureScoStreams() {
         activeScoStreams.clear();
         mActiveStreamMutex.lock();
         getActiveStream_l(activeScoStreams, dev);
-        mActiveStreamMutex.unlock();
         if (activeScoStreams.size() > 0) {
             for (sIter = activeScoStreams.begin();
                 sIter != activeScoStreams.end(); sIter++) {
+                status = increaseStreamUserCounter(*sIter);
+                reconfigureStreams.push_back(*sIter);
+                if (0 != status) {
+                    PAL_ERR(LOG_TAG,
+                            "Error incrementing the stream counter for the stream handle: %pK",
+                            *sIter);
+                    continue;
+                }
                 streamDevDisconnect.push_back({*sIter, devId});
                 streamDevConnect.push_back({*sIter, dattr});
             }
         }
+        mActiveStreamMutex.unlock();
         dattr = nullptr;
     }
 
@@ -14639,5 +14648,19 @@ void ResourceManager::reconfigureScoStreams() {
     if (status) {
         PAL_ERR(LOG_TAG, "streamDevSwitch failed %d", status);
     }
+    mActiveStreamMutex.lock();
+    if (reconfigureStreams.size() > 0) {
+        for (sIter = reconfigureStreams.begin();
+            sIter != reconfigureStreams.end(); sIter++) {
+            status = decreaseStreamUserCounter(*sIter);
+            if (0 != status) {
+                PAL_ERR(LOG_TAG,
+                        "Error decrementing the stream counter for the stream handle: %pK",
+                        *sIter);
+                continue;
+            }
+        }
+    }
+    mActiveStreamMutex.unlock();
     for (auto dAttr : palDevices) free(dAttr);
 }
