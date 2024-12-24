@@ -1656,9 +1656,13 @@ int32_t SoundTriggerEngineGsl::ConnectSessionDevice(
 
     int32_t status = 0;
 
-    if (dev_disconnect_count_ == 0)
+    if (dev_disconnect_count_ == 0) {
         status = session_->connectSessionDevice(stream_handle, stream_type,
                                             device_to_connect);
+        if (GetOtherActiveStream(stream_handle)) {
+            exit_buffering_ = false;
+        }
+    }
 
     PAL_DBG(LOG_TAG, "dev_disconnect_count_: %d", dev_disconnect_count_);
     return status;
