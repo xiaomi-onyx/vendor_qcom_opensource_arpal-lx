@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -86,6 +86,7 @@ typedef enum {
 #define AUDIO_PARAMETER_KEY_HIFI_FILTER "hifi_filter"
 #define AUDIO_PARAMETER_KEY_LPI_LOGGING "lpi_logging_enable"
 #define AUDIO_PARAMETER_KEY_UPD_DEDICATED_BE "upd_dedicated_be"
+#define AUDIO_PARAMETER_KEY_UPD_SET_CUSTOM_GAIN "upd_set_custom_gain"
 #define AUDIO_PARAMETER_KEY_DUAL_MONO "dual_mono"
 #define AUDIO_PARAMETER_KEY_SIGNAL_HANDLER "signal_handler"
 #define AUDIO_PARAMETER_KEY_DEVICE_MUX "device_mux_config"
@@ -514,6 +515,7 @@ private:
     void onChargingStateChange();
     void onVUIStreamRegistered();
     void onVUIStreamDeregistered();
+    int setUltrasoundGain(pal_ultrasound_gain_t gain, Stream *s);
     bool checkDeviceSwitchForHaptics(struct pal_device *inDevAttr, struct pal_device *curDevAttr);
     SoundTriggerOnResourceAvailableCallback onResourceAvailCb = NULL;
     uint64_t onResourceAvailCookie;
@@ -714,6 +716,8 @@ public:
     static bool isUPDVirtualPortEnabled;
     /* Flag to indicate if Haptics isdriven thorugh WSA */
     static bool isHapticsthroughWSA;
+    /* Flag to indicate whether to send custom gain commands to UPD modules or not? */
+    static bool isUpdSetCustomGainEnabled;
     /* Variable to store max volume index for voice call */
     static int max_voice_vol;
     /*Silence Detection Enable flag for PCM session*/
@@ -870,7 +874,8 @@ public:
     int getActiveStream_l(std::vector<Stream*> &activestreams,std::shared_ptr<Device> d = nullptr);
     int getOrphanStream(std::vector<Stream*> &orphanstreams, std::vector<Stream*> &retrystreams);
     int getOrphanStream_l(std::vector<Stream*> &orphanstreams, std::vector<Stream*> &retrystreams);
-    int getActiveDevices(std::vector<std::shared_ptr<Device>> &deviceList);
+    void getActiveDevices(std::vector<std::shared_ptr<Device>> &deviceList);
+    void getActiveDevices_l(std::vector<std::shared_ptr<Device>> &deviceList);
     int getSndDeviceName(int deviceId, char *device_name);
     int getDeviceEpName(int deviceId, std::string &epName);
     int getBackendName(int deviceId, std::string &backendName);
@@ -924,6 +929,7 @@ public:
     bool IsDedicatedBEForUPDEnabled();
     bool IsDutyCycleForUPDEnabled();
     bool IsVirtualPortForUPDEnabled();
+    bool IsCustomGainEnabledForUPD();
     uint32_t getHapticsPriority();
     bool IsHapticsThroughWSA();
     void GetSoundTriggerConcurrencyCount(pal_stream_type_t type, int32_t *enable_count, int32_t *disable_count);
@@ -1025,6 +1031,7 @@ public:
     static int setUpdDedicatedBeEnableParam(struct str_parms *parms,char *value, int len);
     static int setUpdDutyCycleEnableParam(struct str_parms *parms,char *value, int len);
     static int setUpdVirtualPortParam(struct str_parms *parms, char *value, int len);
+    static int setUpdCustomGainParam(struct str_parms *parms,char *value, int len);
     static int setDualMonoEnableParam(struct str_parms *parms,char *value, int len);
     static int setSignalHandlerEnableParam(struct str_parms *parms,char *value, int len);
     static int setMuxconfigEnableParam(struct str_parms *parms,char *value, int len);
