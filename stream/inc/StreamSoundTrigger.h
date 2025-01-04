@@ -198,6 +198,7 @@ public:
         else
             return nullptr;
     }
+    bool isLPIProfile();
 
     std::vector<PalRingBufferReader *> GetReaders() { return reader_list_;}
 
@@ -539,6 +540,8 @@ private:
        const struct pal_st_recognition_config *current_config,
        struct pal_st_recognition_config *new_config);
 
+    bool is_abort_event_notifying_;
+    std::condition_variable abort_event_cond_;
     int32_t notifyClient(uint32_t detection);
 
     static void TimerThread(StreamSoundTrigger& st_stream);

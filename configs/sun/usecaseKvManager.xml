@@ -935,6 +935,42 @@
                 <graph_kv key="0xA3000000" value="0xA3000010"/>
             </keys_and_values>
         </device>
+        <device id="PAL_DEVICE_OUT_BLUETOOTH_HFP">
+            <keys_and_values CodecFormat="CODEC_TYPE_INVALID">
+                <!-- DEVICERX - HFP_RX -->
+                <graph_kv key="0xA2000000" value="0xA2000014"/>
+            </keys_and_values>
+            <keys_and_values CodecFormat="CODEC_TYPE_APTX_AD_SPEECH">
+                <!-- DEVICERX - BT_RX -->
+            <graph_kv key="0xA2000000" value="0xA2000014"/>
+                <!-- BT_FORMAT - SWB -->
+                <graph_kv key="0xB5000000" value="0xB5000004"/>
+            </keys_and_values>
+            <keys_and_values CodecFormat="CODEC_TYPE_LC3">
+                <!-- DEVICERX - BT_RX -->
+                 <graph_kv key="0xA2000000" value="0xA2000014"/>
+                <!-- BT_FORMAT - LC3 -->
+                <graph_kv key="0xB5000000" value="0xB5000005"/>
+            </keys_and_values>
+        </device>
+        <device id="PAL_DEVICE_IN_BLUETOOTH_HFP">
+            <keys_and_values CodecFormat="CODEC_TYPE_INVALID">
+                <!-- DEVICETX - HFP_TX -->
+                <graph_kv key="0xA3000000" value="0xA3000015"/>
+            </keys_and_values>
+            <keys_and_values CodecFormat="CODEC_TYPE_APTX_AD_SPEECH">
+                <!-- DEVICETX - BT_TX -->
+                <graph_kv key="0xA3000000" value="0xA3000015"/>
+                <!-- BT_FORMAT - SWB -->
+                <graph_kv key="0xB5000000" value="0xB5000004"/>
+            </keys_and_values>
+            <keys_and_values CodecFormat="CODEC_TYPE_LC3">
+                <!-- DEVICETX - BT_TX -->
+                <graph_kv key="0xA3000000" value="0xA3000015"/>
+                <!-- BT_FORMAT - LC3 -->
+                <graph_kv key="0xB5000000" value="0xB5000005"/>
+            </keys_and_values>
+        </device>
     </devices>
     <devicepps>
         <!-- OUT Speaker DevicePPs -->
@@ -1128,6 +1164,21 @@
             <keys_and_values StreamType="PAL_STREAM_LOOPBACK" SubType="PAL_STREAM_LOOPBACK_HFP_TX">
                 <!-- DEVICERX - BT_RX -->
                 <graph_kv key="0xA2000000" value="0xA2000003"/>
+                <!-- DEVICEPP_RX - DEVICEPP_RX_HFPSINK  -->
+                <graph_kv key="0xAC000000" value="0xAC000004"/>
+            </keys_and_values>
+        </devicepp>
+        <!-- OUT BT HFP DevicePPs -->
+        <devicepp id="PAL_DEVICE_OUT_BLUETOOTH_HFP">
+            <keys_and_values StreamType="PAL_STREAM_DEEP_BUFFER,PAL_STREAM_PCM_OFFLOAD,PAL_STREAM_COMPRESSED,PAL_STREAM_LOW_LATENCY,PAL_STREAM_GENERIC,PAL_STREAM_SPATIAL_AUDIO">
+                <!-- DEVICERX - BT_RX -->
+                <graph_kv key="0xA2000000" value="0xA2000014"/>
+                <!-- DEVICEPP_RX - DEVICEPP_RX_AUDIO_MBDRC -->
+                <graph_kv key="0xAC000000" value="0xAC000002"/>
+            </keys_and_values>
+            <keys_and_values StreamType="PAL_STREAM_LOOPBACK" SubType="PAL_STREAM_LOOPBACK_HFP_TX">
+                <!-- DEVICERX - BT_RX -->
+                <graph_kv key="0xA2000000" value="0xA2000014"/>
                 <!-- DEVICEPP_RX - DEVICEPP_RX_HFPSINK  -->
                 <graph_kv key="0xAC000000" value="0xAC000004"/>
             </keys_and_values>
@@ -1563,7 +1614,7 @@
                 <graph_kv key="0xAD000000" value="0xAD00001B"/>
             </keys_and_values>
             <keys_and_values StreamType="PAL_STREAM_VOICE_UI"
-                DevicePPType="SINGLE_MIC_48KHZ_16BIT_RAW_NLPI,DUAL_MIC_48KHZ_16BIT_RAW_NLPI">
+                DevicePPType="SINGLE_MIC_48KHZ_16BIT_RAW_NLPI,DUAL_MIC_48KHZ_16BIT_RAW_NLPI,SINGLE_MIC_16KHZ_16BIT_RAW_NLPI">
                 <!-- DEVICETX - HANDSETMIC_VA -->
                 <graph_kv key="0xA3000000" value="0xA3000006"/>
                 <!-- DEVICEPP_TX - DEVICEPP_TX_RAW_NLPI -->

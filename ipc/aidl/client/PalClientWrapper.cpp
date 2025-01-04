@@ -587,9 +587,13 @@ int32_t pal_gef_rw_param(uint32_t param_id, void *param_payload, size_t payload_
     auto aidlPalStreamType = static_cast<PalStreamType>(pal_stream_type);
     auto aidlDir = static_cast<int8_t>(dir);
     std::vector<uint8_t> aidlReturn;
-
-    return statusTFromBinderStatus(client->ipc_pal_gef_rw_param(
-            aidlParamId, aidlPayload, aidlPalDeviceId, aidlPalStreamType, aidlDir, &aidlReturn));
+    memcpy(aidlPayload.data(), param_payload, payload_size);
+    auto status = client->ipc_pal_gef_rw_param(
+            aidlParamId, aidlPayload, aidlPalDeviceId, aidlPalStreamType, aidlDir, &aidlReturn);
+    if (status.isOk() && (dir == GEF_PARAM_READ)) {
+        memcpy(param_payload, aidlReturn.data(), payload_size);
+    }
+    return statusTFromBinderStatus(status);
 }
 
 int32_t pal_gef_rw_param_acdb(uint32_t param_id, void *param_payload, size_t payload_size,

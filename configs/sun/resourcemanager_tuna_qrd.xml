@@ -578,7 +578,7 @@
             <id>PAL_DEVICE_IN_VI_FEEDBACK</id>
             <back_end_name>CODEC_DMA-LPAIF_WSA-TX-0</back_end_name>
             <max_channels>2</max_channels>
-            <channels>2</channels>
+            <channels>1</channels>
             <samplerate>8000</samplerate>
             <bit_width>32</bit_width>
             <snd_device_name>vi-feedback</snd_device_name>
@@ -592,7 +592,7 @@
             <id>PAL_DEVICE_IN_CPS_FEEDBACK</id>
             <back_end_name>CODEC_DMA-LPAIF_WSA-TX-2</back_end_name>
             <max_channels>2</max_channels>
-            <channels>2</channels>
+            <channels>1</channels>
             <samplerate>24000</samplerate>
             <bit_width>32</bit_width>
             <snd_device_name>cps-feedback</snd_device_name>
@@ -757,7 +757,6 @@
                 <name>PAL_STREAM_VOICE_CALL</name>
                 <custom-config key="crsCall">
                     <priority>1</priority>
-                    <channels>2</channels>
                     <snd_device_name>speaker</snd_device_name>
                 </custom-config>
             </usecase>
@@ -1067,7 +1066,7 @@
         </out-device>
         <out-device>
             <id>PAL_DEVICE_OUT_ULTRASOUND</id>
-            <back_end_name>CODEC_DMA-LPAIF_WSA-RX-1</back_end_name>
+            <back_end_name>CODEC_DMA-LPAIF_RXTX-RX-1</back_end_name>
             <max_channels>2</max_channels>
             <channels>1</channels>
             <snd_device_name>ultrasound-handset</snd_device_name>
@@ -1076,7 +1075,7 @@
         </out-device>
         <out-device>
             <id>PAL_DEVICE_OUT_ULTRASOUND_DEDICATED</id>
-            <back_end_name>CODEC_DMA-LPAIF_WSA-RX-0</back_end_name>
+            <back_end_name>CODEC_DMA-LPAIF_RXTX-RX-1</back_end_name>
             <max_channels>2</max_channels>
             <channels>1</channels>
             <snd_device_name>handset</snd_device_name>
