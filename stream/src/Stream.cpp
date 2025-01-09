@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1871,7 +1871,7 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
          */
         // This assumes that PAL_DEVICE_NONE comes as single device
         if (checkNoneDevice && newDevices[i].id == PAL_DEVICE_NONE) {
-            if (ResourceManager::isDummyDevEnabled)
+            if (ResourceManager::isDummyDevEnabled && mDevices.size() == 1)
                 newDevices[i].id = PAL_DEVICE_OUT_DUMMY;
             else
                 newDevices[i].id = PAL_DEVICE_OUT_SPEAKER;
