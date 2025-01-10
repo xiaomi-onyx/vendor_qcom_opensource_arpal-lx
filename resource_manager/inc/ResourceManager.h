@@ -95,6 +95,7 @@ typedef enum {
 #define AUDIO_PARAMETER_KEY_WSA_HAPTICS "haptics_through_wsa"
 #define AUDIO_PARAMETER_KEY_DUMMY_DEV_ENABLE "dummy_dev_enable"
 #define AUDIO_PARAMETER_MULTI_SR_COMBO_SUPPORTED "multiple_sample_rate_combo_supported"
+#define AUDIO_PARAMETER_KEY_PAL_SSR_TRIGGER_ENABLE "ssr_trigger_in_pal"
 #define MAX_PCM_NAME_SIZE 50
 #define MAX_STREAM_INSTANCES (sizeof(uint64_t) << 3)
 #define MIN_USECASE_PRIORITY 0xFFFFFFFF
@@ -687,6 +688,7 @@ public:
     static bool isCRSCallEnabled;
     static bool isDummyDevEnabled;
     static bool isProxyRecordActive;
+    static bool isPalSsrTriggerEnabled;
     static std::mutex mChargerBoostMutex;
     /* Variable to store which speaker side is being used for call audio.
      * Valid for Stereo case only
@@ -1032,6 +1034,7 @@ public:
     static int setHapticsDrivenParam(struct str_parms *parms,char *value, int len);
     static void setConnectivityProxyEnableParam(struct str_parms *parms,char *value, int len);
     static void setDummyDevEnableParam(struct str_parms *parms, char *value, int len);
+    static void setPalSsrTriggerParam(struct str_parms *parms,char *value, int len);
     static bool isLpiLoggingEnabled();
     static void processConfigParams(const XML_Char **attr);
     static bool isValidDevId(int deviceId);

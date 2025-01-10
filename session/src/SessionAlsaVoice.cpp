@@ -1183,7 +1183,8 @@ err_pcm_open:
         pcm_close(pcmTx);
         pcmTx = NULL;
     }
-    if (ssr_trigger_enable) {
+    if (ssr_trigger_enable &&
+        ResourceManager::isPalSsrTriggerEnabled) {
         retries++;
         if (retries >= MAX_RETRY) {
             if (status)
@@ -1259,7 +1260,8 @@ silence_det_setup_done:
         }
     }
     /*config mute on pop suppressor*/
-    if (!ssr_trigger_enable) {
+    if (!ssr_trigger_enable ||
+        !ResourceManager::isPalSsrTriggerEnabled) {
         setPopSuppressorMute(s);
         usleep(POP_SUPPRESSOR_RAMP_DELAY);
     }
