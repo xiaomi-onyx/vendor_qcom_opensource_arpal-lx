@@ -49,7 +49,6 @@
     <ctl name="SpkrLeft SWR DAC_Port Switch" value="0" />
     <ctl name="SpkrLeft PBR Switch" value="0" />
     <ctl name="SpkrLeft WSA MODE" value="0" />
-    <ctl name="SpkrLeft WSA PA Gain" value="G_M9_DB" />
 
     <!-- RX Controls -->
     <ctl name="RX_MACRO RX0 MUX" value="ZERO" />
