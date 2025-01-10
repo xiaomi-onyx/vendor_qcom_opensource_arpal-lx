@@ -53,6 +53,7 @@
         <param key="haptics_priority" value ="touch_haptics" />
         <param key="haptics_through_wsa" value ="true" />
         <param key="dummy_dev_enable" value ="true" />
+        <param key="ssr_trigger_in_pal" value ="true" />
     </config_params>
     <config_volume>
         <use_volume_set_param>0</use_volume_set_param>
