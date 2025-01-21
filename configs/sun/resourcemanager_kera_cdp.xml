@@ -94,7 +94,7 @@
         <avoid_vote_stream_type>PAL_STREAM_CONTEXT_PROXY</avoid_vote_stream_type>
     </sleep_monitor_vote_streams>
     <perf_lock library="libqti-perfd-client.so" config="0x40400000, 0x1, 0x40800000, 0x514" />
-    <silence_detection_config pcm="1" voice="1" duration="3000"/>
+    <silence_detection_config pcm="0" voice="0" duration="3000"/>
     <group_device_cfg>
         <upd_rx>
             <snd_device name="handset" />
