@@ -1897,7 +1897,7 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
          */
         // This assumes that PAL_DEVICE_NONE comes as single device
         if (checkNoneDevice && newDevices[i].id == PAL_DEVICE_NONE) {
-            if (ResourceManager::isDummyDevEnabled)
+            if (ResourceManager::isDummyDevEnabled && mDevices.size() == 1)
                 newDevices[i].id = PAL_DEVICE_OUT_DUMMY;
             else
                 newDevices[i].id = PAL_DEVICE_OUT_SPEAKER;
