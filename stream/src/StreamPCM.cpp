@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -207,8 +207,11 @@ int32_t  StreamPCM::open()
     for (int32_t i = 0; i < mDevices.size(); i++) {
         pal_device_id_t dev_id = (pal_device_id_t) mDevices[i]->getSndDeviceId();
         if (rm->isBtDevice(dev_id) &&
-           (!rm->isDeviceAvailable(dev_id) || !rm->isDeviceReady(dev_id))) {
-            PAL_ERR(LOG_TAG, "BT device %d not connected, cannot open stream", dev_id);
+            (!rm->isDeviceAvailable(dev_id) ||
+             (!rm->isDeviceReady(dev_id) && mDevices.size() == 1))) {
+            PAL_ERR(LOG_TAG,
+                "BT device %d not connected or not ready, cannot open stream",
+                 dev_id);
             status = -ENODEV;
             goto exit;
         }
