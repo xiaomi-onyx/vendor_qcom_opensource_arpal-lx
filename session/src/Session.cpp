@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -1463,48 +1463,6 @@ int Session::enableSilenceDetection(const std::shared_ptr<ResourceManager> rm,
     }
 
     PAL_INFO(LOG_TAG, "Registered CB for Silence Detection\n");
-
-    status =  SessionAlsaUtils::getModuleInstanceId(mixer,
-                   devIds.at(0), intf_name, DEVICE_HW_ENDPOINT_TX, &miid);
-    if (status != 0) {
-        PAL_ERR(LOG_TAG, "Error retriving MIID for HW_ENDPOINT_TX\n");
-         goto err_silence_ev_setup;
-    }
-
-    payloadSize = sizeof(struct apm_module_param_data_t)+sizeof(param_id_silence_detection_t);
-    pad_bytes = PAL_PADDING_8BYTE_ALIGN(payloadSize);
-
-    payload = (uint8_t *)calloc(1, payloadSize+pad_bytes);
-    if (!payload){
-        PAL_ERR(LOG_TAG, "payload info calloc failed \n");
-        goto err_silence_ev_setup;
-    }
-    header = (struct apm_module_param_data_t  *)payload;
-    header->module_instance_id = miid;
-    header->param_id =  PARAM_ID_SILENCE_DETECTION;
-    header->error_code = 0x0;
-    header->param_size = payloadSize - sizeof(struct apm_module_param_data_t);
-
-    silence_detection_cfg = (param_id_silence_detection_t *)(payload +
-                    sizeof(struct apm_module_param_data_t));
-    silence_detection_cfg->enable_detection = 1;
-    silence_detection_cfg->detection_duration_ms = ResourceManager::silenceDetectionDuration;
-
-    PAL_INFO(LOG_TAG, "Sending Silence Detection Custom Payload\n");
-    status = updateCustomPayload (payload, (payloadSize+pad_bytes));
-    freeCustomPayload(&payload, &payloadSize);
-    if (status !=0 ) {
-        PAL_ERR(LOG_TAG, "updateCustomPayload failed for SILENCE DETECTION \n");
-        goto err_silence_ev_setup;
-    }
-
-    status = SessionAlsaUtils::setMixerParameter(mixer, devIds.at(0),
-                    customPayload, customPayloadSize);
-    freeCustomPayload();
-    if (status !=0) {
-        PAL_ERR(LOG_TAG, "setMixerParameter failed for Silence Detection Parameter");
-        goto err_silence_ev_setup;
-    }
     silenceEventRegistered = true;
     PAL_INFO(LOG_TAG, "Silence Detection setup sucessfully \n");
 

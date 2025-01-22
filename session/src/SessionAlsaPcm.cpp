@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -53,6 +53,7 @@
 #include "detection_cmn_api.h"
 #include "acd_api.h"
 #include "asr_module_calibration_api.h"
+#include "hw_intf_cmn_api.h"
 
 std::mutex SessionAlsaPcm::pcmLpmRefCntMtx;
 int SessionAlsaPcm::pcmLpmRefCnt = 0;
@@ -382,6 +383,57 @@ int SessionAlsaPcm::open(Stream * s)
     }
 exit:
     PAL_DBG(LOG_TAG, "Exit status: %d", status);
+    return status;
+}
+
+int SessionAlsaPcm::silenceDetectionConfig(uint8_t config, pal_device *dAttr) {
+    int status = 0;
+    uint32_t miid = 0;
+    size_t pad_bytes = 0, payloadSize = 0;
+    uint8_t* payload = NULL;
+    struct apm_module_param_data_t* header = NULL;
+    param_id_silence_detection_t *silence_detection_cfg = NULL;
+
+    if (!ResourceManager::isSilenceDetectionEnabledPcm)
+        return 0;
+
+    if (config != SD_SETPARAM) {
+        PAL_ERR(LOG_TAG, "Invalid config to enable Silence Detection \n");
+        return -EINVAL;
+    }
+    status =  SessionAlsaUtils::getModuleInstanceId(mixer,
+        pcmDevIds.at(0), txAifBackEnds[0].second.data(), DEVICE_HW_ENDPOINT_TX, &miid);
+    if (status != 0) {
+        PAL_ERR(LOG_TAG, "Error retriving MIID for HW_ENDPOINT_TX\n");
+        return -SD_ENABLE;
+    }
+    payloadSize = sizeof(struct apm_module_param_data_t)+sizeof(param_id_silence_detection_t);
+    pad_bytes = PAL_PADDING_8BYTE_ALIGN(payloadSize);
+
+    payload = (uint8_t *)calloc(1, payloadSize+pad_bytes);
+    if (!payload){
+        PAL_ERR(LOG_TAG, "payload info calloc failed \n");
+        return -SD_ENABLE;
+    }
+
+    header = (struct apm_module_param_data_t *)payload;
+    header->module_instance_id = miid;
+    header->param_id =  PARAM_ID_SILENCE_DETECTION;
+    header->error_code = 0x0;
+    header->param_size = payloadSize - sizeof(struct apm_module_param_data_t);
+
+    silence_detection_cfg = (param_id_silence_detection_t *)(payload +
+        sizeof(struct apm_module_param_data_t));
+    silence_detection_cfg->enable_detection = 1;
+    silence_detection_cfg->detection_duration_ms = ResourceManager::silenceDetectionDuration;
+    status = SessionAlsaUtils::setMixerParameter(mixer, pcmDevIds.at(0),
+                                                 payload, payloadSize);
+    if (status) {
+        PAL_ERR(LOG_TAG, "Silence Detection enable param failed\n");
+        freeCustomPayload(&payload, &payloadSize);
+        return -SD_ENABLE;
+    }
+    freeCustomPayload(&payload, &payloadSize);
     return status;
 }
 
@@ -1580,13 +1632,13 @@ set_mixer:
             if (ResourceManager::isSilenceDetectionEnabledPcm && sAttr.type != PAL_STREAM_VOICE_CALL_RECORD) {
                 status = s->getAssociatedDevices(associatedDevices);
                 if (0 != status) {
-                    PAL_ERR(LOG_TAG,"getAssociatedDevices Failed for Silence Detection\n");
+                    PAL_ERR(LOG_TAG,"getAssociatedDevices failed for Silence Detection\n");
                     goto silence_det_setup_done;
                 }
                 for (int i = 0; i < associatedDevices.size();i++) {
                     status = associatedDevices[i]->getDeviceAttributes(&dAttr);
                     if (0 != status) {
-                       PAL_ERR(LOG_TAG,"get Device Attributes Failed for Silence Detection\n");
+                       PAL_ERR(LOG_TAG,"get Device Attributes failed for Silence Detection\n");
                        goto silence_det_setup_done;
                     }
                 }
@@ -1594,6 +1646,13 @@ set_mixer:
                 if (dAttr.id == PAL_DEVICE_IN_HANDSET_MIC || dAttr.id == PAL_DEVICE_IN_SPEAKER_MIC) {
                     (void) Session::enableSilenceDetection(rm, mixer, pcmDevIds,
                                     txAifBackEnds[0].second.data(), (uint64_t)this);
+                    status = silenceDetectionConfig(SD_SETPARAM, nullptr);
+                    if (status != 0) {
+                        PAL_ERR(LOG_TAG, "Enable param failed for Silence Detection\n");
+                        (void) Session::disableSilenceDetection(rm, mixer, pcmDevTxIds,
+                                        txAifBackEnds[0].second.data(), (uint64_t)this);
+                        goto silence_det_setup_done;
+                    }
                 }
 
 silence_det_setup_done:
