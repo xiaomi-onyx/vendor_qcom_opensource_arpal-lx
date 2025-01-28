@@ -4427,10 +4427,11 @@ int SessionAlsaPcm::openGraph(Stream *s) {
         }
 
         mState = SESSION_OPENED;
+        goto exit;
     } else {
         PAL_ERR(LOG_TAG, "Invalid session state %d", mState);
         status = -EINVAL;
-        goto exit;
+        goto error_open;
     }
 
 error_open:
