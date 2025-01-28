@@ -5737,20 +5737,30 @@ bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
 
     /*
      * When switching from NLPI to LPI:
-     * 1. If low latency bargein is enabled, nlpi to lpi switch
-     *    will be delayed by 5s until sleep is done in thread
+     * 1. If current deferred switch state is LPI to NLPI switch,
+     *    just reset deferred switch state and switch count, as final
+          state would be NLPI, which is current state, hence no change needed.
+     * 2. If low latency bargein is enabled, nlpi to lpi switch
+     *    will be deferred by 5s until sleep is done in thread
      *    voiceUIDeferredSwitchLoop.
-     * 2. Else if there's any VoiceUI stream in buffering, delay
-     *    switch until buffering is done.
+     * 2. If there's any VoiceUI stream in buffering, defer switch
+     *    until buffering is done.
      *
      * When switching from LPI to NLPI:
-     * 1. If there's any VoiceUI stream in buffering, delay switch
+     * 1. If current deferred switch state is NLPI to LPI switch,
+     *    just reset deferred switch state and switch count, as final
+          state would be LPI, which is current state, hence no change needed.
+     * 2. If there's any VoiceUI stream in buffering, delay switch
      *    until buffering is done.
-     * 2. Additionally if low latency bargein is enabled and there's
-     *    pending NLPI to LPI switch, then skip the pending switch
-     *    and exit the sleep in voiceUIDeferredSwitchLoop.
      */
     if (!stream_active) {
+        if (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) {
+            deferredSwitchState = NO_DEFER;
+            PAL_INFO(LOG_TAG, "LPI to NLPI switch cancelled");
+            if (IsLowLatencyBargeinSupported())
+                deferred_switch_cnt_ = -1;
+            return true;
+        }
         if (IsLowLatencyBargeinSupported() && active_streams_st.size()) {
             deferredSwitchState =
                 (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) ? NO_DEFER :
@@ -5761,32 +5771,29 @@ bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
             deferred_switch_cnt_ = NLPI_LPI_SWITCH_DELAY_SEC;
             vui_switch_cv_.notify_all();
             return true;
-        } else if (isAnyVUIStreamBuffering()) {
-            deferredSwitchState =
-                (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) ? NO_DEFER :
-                 DEFER_NLPI_LPI_SWITCH;
+        }
+        if (isAnyVUIStreamBuffering()) {
+            deferredSwitchState = DEFER_NLPI_LPI_SWITCH;
             PAL_INFO(LOG_TAG,
                 "VUI stream in buffering, defer NLPI->LPI switch, deferred state:%d",
                 deferredSwitchState);
             return true;
         }
     } else {
+        if (deferredSwitchState == DEFER_NLPI_LPI_SWITCH) {
+            deferredSwitchState = NO_DEFER;
+            PAL_INFO(LOG_TAG, "NLPI to LPI switch cancelled");
+            if (IsLowLatencyBargeinSupported()) {
+                deferred_switch_cnt_ = -1;
+            }
+            return true;
+        }
         if (isAnyVUIStreamBuffering()) {
-            deferredSwitchState =
-                (deferredSwitchState == DEFER_NLPI_LPI_SWITCH) ? NO_DEFER :
-                 DEFER_LPI_NLPI_SWITCH;
+            deferredSwitchState = DEFER_LPI_NLPI_SWITCH;
             PAL_INFO(LOG_TAG,
                 "VUI stream in buffering, defer LPI->NLPI switch, deferred state:%d,"
                 " LPI will be used until buffering done, hence EC won't be applied",
                 deferredSwitchState);
-            return true;
-        }
-        if (IsLowLatencyBargeinSupported() &&
-            deferredSwitchState == DEFER_NLPI_LPI_SWITCH) {
-            deferredSwitchState = NO_DEFER;
-            deferred_switch_cnt_ = -1;
-            PAL_INFO(LOG_TAG,
-                "Cancel pending NLPI to LPI switch as new concurrency coming");
             return true;
         }
     }
@@ -5966,7 +5973,7 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(Stream* s,
 
     if (do_st_stream_switch) {
         if (checkAndUpdateDeferSwitchState(active)) {
-            PAL_DBG(LOG_TAG, "Switch is deferred");
+            PAL_DBG(LOG_TAG, "Switch is deferred/cancelled");
         } else {
             use_lpi_ = use_lpi_temp;
             handleConcurrentStreamSwitch(st_streams);
