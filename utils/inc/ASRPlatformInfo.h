@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -60,7 +60,6 @@ public:
     size_t GetInputBufferSize() const { return input_buffer_size_; }
     size_t GetPartialModeInputBufferSize() const { return partial_mode_input_buffer_size_; }
     size_t GetBufferingModeOutBufferSize() const { return buffering_mode_out_buffer_size_; }
-    uint32_t GetCommandModeTimeout() const { return command_mode_timeout_; }
     uint32_t GetInputBufferSize(int mode);
     uint32_t GetOutputBufferSize(int mode);
 
@@ -69,7 +68,6 @@ private:
     size_t input_buffer_size_;
     size_t partial_mode_input_buffer_size_;
     size_t buffering_mode_out_buffer_size_;
-    uint32_t command_mode_timeout_;
 };
 
 class ASRStreamConfig : public SoundTriggerXml
@@ -94,11 +92,13 @@ public:
         return asr_op_modes_.at(mode_pair);
     }
     UUID GetUUID() const { return vendor_uuid_; }
+    bool GetStreamLPIFlag() const { return lpi_enable_; }
 
 private:
     std::string name_;
     st_op_modes_t asr_op_modes_;
     UUID vendor_uuid_;
+    bool lpi_enable_;
     std::shared_ptr<SoundTriggerXml> curr_child_;
     uint32_t module_tag_ids_[ASR_MAX_PARAM_IDS];
     uint32_t param_ids_[ASR_MAX_PARAM_IDS];

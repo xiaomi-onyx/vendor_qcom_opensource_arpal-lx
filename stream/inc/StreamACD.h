@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
+ * Copyright (c) 2022-2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -145,6 +145,7 @@ class StreamACD : public Stream {
     void SetEngineDetectionData(struct acd_context_event *event);
     struct acd_recognition_cfg *GetRecognitionConfig();
     struct st_uuid GetVendorUuid();
+    bool ConfigSupportLPI() override;
 
  private:
     class ACDEventConfigData {
@@ -464,6 +465,7 @@ class StreamACD : public Stream {
     acd_state_id_t state_for_restore_;
     bool notificationInProgress = false;
     bool deferredNotification = false;
+    bool concNotified;
 
     std::map<uint32_t, ACDState*> acd_states_;
  protected:

@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -198,6 +198,7 @@ public:
     virtual int checkAndSetExtEC(const std::shared_ptr<ResourceManager>& rm,
                                  Stream *s, bool is_enable);
     virtual void AdmRoutingChange(Stream *s __unused) {  };
+    virtual int silenceDetectionConfig(uint8_t config, pal_device *dattr) {return 0;};
     int enableSilenceDetection(const std::shared_ptr<ResourceManager> rm,
                     struct mixer *mixer, const std::vector<int> &DevIds,
                     const char *intf_name, uint64_t cookie);

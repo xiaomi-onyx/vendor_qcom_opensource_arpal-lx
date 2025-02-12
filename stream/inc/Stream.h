@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -66,6 +66,10 @@ typedef enum {
     STREAM_STOPPED
 } stream_state_t;
 
+#define SD_DISCONNECT 0
+#define SD_CONNECT 1
+#define SD_ENABLE 2
+#define SD_SETPARAM 3
 #define BUF_SIZE_PLAYBACK 1024
 #define BUF_SIZE_CAPTURE 960
 #define AUDIO_CAPTURE_PERIOD_DURATION_MSEC 20

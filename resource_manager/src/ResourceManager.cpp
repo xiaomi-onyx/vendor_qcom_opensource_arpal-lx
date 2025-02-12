@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -526,13 +526,9 @@ std::thread ResourceManager::mixerEventTread;
 bool ResourceManager::mixerClosed = false;
 int ResourceManager::mixerEventRegisterCount = 0;
 int ResourceManager::TxconcurrencyEnableCount = 0;
-int ResourceManager::concurrencyEnableCount = 0;
 int ResourceManager::concurrencyDisableCount = 0;
-int ResourceManager::ACDConcurrencyEnableCount = 0;
 int ResourceManager::ACDConcurrencyDisableCount = 0;
-int ResourceManager::ASRConcurrencyEnableCount = 0;
 int ResourceManager::ASRConcurrencyDisableCount = 0;
-int ResourceManager::SNSPCMDataConcurrencyEnableCount = 0;
 int ResourceManager::SNSPCMDataConcurrencyDisableCount = 0;
 defer_switch_state_t ResourceManager::deferredSwitchState = NO_DEFER;
 std::thread ResourceManager::vui_deferred_switch_thread_;
@@ -566,6 +562,7 @@ bool ResourceManager::isUpdDedicatedBeEnabled = false;
 bool ResourceManager::isDeviceMuxConfigEnabled = false;
 bool ResourceManager::isUpdDutyCycleEnabled = false;
 bool ResourceManager::isUPDVirtualPortEnabled = false;
+bool ResourceManager::isUpdSetCustomGainEnabled = false;
 bool ResourceManager::isCPEnabled = false;
 bool ResourceManager::isDummyDevEnabled = false;
 bool ResourceManager::isProxyRecordActive = false;
@@ -1073,10 +1070,6 @@ ResourceManager::ResourceManager()
         throw std::runtime_error("Failed to allocate ContextManager");
 
     }
-
-    // init use_lpi_ flag
-    use_lpi_ = IsLPISupported();
-
 
 #ifdef SOC_PERIPHERAL_PROT
     socPerithread = std::thread(loadSocPeripheralLib);
@@ -4524,6 +4517,17 @@ int ResourceManager::registerDevice(std::shared_ptr<Device> d, Stream *s)
     } else {
         checkandEnableEC_l(d, s, true);
     }
+
+    if (IsCustomGainEnabledForUPD() &&
+            (1 == d->getDeviceCount())) {
+        /* Try to set Ultrasound Gain if needed */
+        if (PAL_DEVICE_OUT_SPEAKER == d->getSndDeviceId()) {
+            setUltrasoundGain(PAL_ULTRASOUND_GAIN_HIGH, s);
+        } else if ((PAL_DEVICE_OUT_HANDSET == d->getSndDeviceId()) ||
+                (PAL_DEVICE_OUT_ULTRASOUND_DEDICATED == d->getSndDeviceId())) {
+            setUltrasoundGain(PAL_ULTRASOUND_GAIN_LOW, s);
+        }
+    }
     mResourceManagerMutex.unlock();
 
     PAL_DBG(LOG_TAG, "Exit.");
@@ -4559,6 +4563,15 @@ int ResourceManager::deregisterDevice(std::shared_ptr<Device> d, Stream *s)
     } else {
         checkandEnableEC_l(d, s, false);
     }
+
+    if (IsCustomGainEnabledForUPD() &&
+            (1 == d->getDeviceCount()) &&
+            ((PAL_DEVICE_OUT_SPEAKER == d->getSndDeviceId()) ||
+             (PAL_DEVICE_OUT_HANDSET == d->getSndDeviceId()) ||
+             (PAL_DEVICE_OUT_ULTRASOUND_DEDICATED == d->getSndDeviceId()))) {
+        setUltrasoundGain(PAL_ULTRASOUND_GAIN_MUTE, s);
+    }
+
     mResourceManagerMutex.unlock();
     PAL_DBG(LOG_TAG, "Exit.");
     return 0;
@@ -4653,14 +4666,17 @@ int ResourceManager::removePlugInDevice(pal_device_id_t device_id,
     return ret;
 }
 
-int ResourceManager::getActiveDevices(std::vector<std::shared_ptr<Device>> &deviceList)
+void ResourceManager::getActiveDevices_l(std::vector<std::shared_ptr<Device>> &deviceList)
 {
-    int ret = 0;
+     for (int i = 0; i < active_devices.size(); i++)
+         deviceList.push_back(active_devices[i].first);
+}
+
+void ResourceManager::getActiveDevices(std::vector<std::shared_ptr<Device>> &deviceList)
+{
     mResourceManagerMutex.lock();
-    for (int i = 0; i < active_devices.size(); i++)
-        deviceList.push_back(active_devices[i].first);
+    getActiveDevices_l(deviceList);
     mResourceManagerMutex.unlock();
-    return ret;
 }
 
 int ResourceManager::getAudioRoute(struct audio_route** ar)
@@ -4720,13 +4736,6 @@ bool ResourceManager::isNLPISwitchSupported() {
     return st_info != nullptr ? st_info->GetSupportNLPISwitch() : false;
 }
 
-bool ResourceManager::IsLPISupported() {
-
-    std::shared_ptr<SoundTriggerPlatformInfo> st_info =
-                             SoundTriggerPlatformInfo::GetInstance();
-    return st_info != nullptr ? st_info->GetLpiEnable() : false;
-}
-
 bool ResourceManager::IsDedicatedBEForUPDEnabled()
 {
     return ResourceManager::isUpdDedicatedBeEnabled;
@@ -4742,6 +4751,11 @@ bool ResourceManager::IsVirtualPortForUPDEnabled()
     return ResourceManager::isUPDVirtualPortEnabled;
 }
 
+bool ResourceManager::IsCustomGainEnabledForUPD()
+{
+    return ResourceManager::isUpdSetCustomGainEnabled;
+}
+
 uint32_t ResourceManager::getHapticsPriority()
 {
     return haptics_priority;
@@ -4753,18 +4767,63 @@ bool ResourceManager::IsHapticsThroughWSA()
 
 }
 
+void ResourceManager::registerNLPIStream(Stream *s)
+{
+    std::lock_guard<std::mutex> lck(mResourceManagerMutex);
+    PAL_DBG(LOG_TAG, "register NLPI stream: %pK", s);
+    mNLPIStreams.insert(s);
+}
+
+void ResourceManager::deregisterNLPIStream(Stream *s)
+{
+    std::lock_guard<std::mutex> lck(mResourceManagerMutex);
+    PAL_DBG(LOG_TAG, "deregister NLPI stream: %pK", s);
+    mNLPIStreams.erase(s);
+}
+
+bool ResourceManager::isStStream(pal_stream_type_t type)
+{
+    switch (type) {
+        case PAL_STREAM_VOICE_UI:
+        case PAL_STREAM_ACD:
+        case PAL_STREAM_ASR:
+        case PAL_STREAM_SENSOR_PCM_DATA:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool ResourceManager::getLPIUsage()
+{
+    int status  = 0;
+    bool nlpi_active = false;
+
+    /*
+     * Here using try lock is because in UpdateSoundTriggerCaptureProfile,
+     * it can hold rm lock and call GetCurrentCaptureProfile of each stream,
+     * in which getLPIUsage can be invoked, which need to hold rm lock again.
+     */
+    status  = mResourceManagerMutex.try_lock();
+    if (mNLPIStreams.size() > 0)
+        nlpi_active = true;
+
+    if (status)
+        mResourceManagerMutex.unlock();
+
+    return !nlpi_active && use_lpi_;
+}
+
 void ResourceManager::GetSoundTriggerConcurrencyCount(
-    pal_stream_type_t type,
-    int32_t *enable_count, int32_t *disable_count) {
+    pal_stream_type_t type, int32_t *disable_count) {
     mActiveStreamMutex.lock();
-    GetSoundTriggerConcurrencyCount_l(type, enable_count, disable_count);
+    GetSoundTriggerConcurrencyCount_l(type, disable_count);
     mActiveStreamMutex.unlock();
 }
 
 // this should only be called when LPI supported by platform
 void ResourceManager::GetSoundTriggerConcurrencyCount_l(
-    pal_stream_type_t type,
-    int32_t *enable_count, int32_t *disable_count) {
+    pal_stream_type_t type, int32_t *disable_count) {
 
     pal_stream_attributes st_attr;
     bool voice_conc_enable = IsVoiceCallConcurrencySupported();
@@ -4774,24 +4833,19 @@ void ResourceManager::GetSoundTriggerConcurrencyCount_l(
     bool low_latency_bargein_enable = IsLowLatencyBargeinSupported();
 
     if (type == PAL_STREAM_ACD) {
-        *enable_count = ACDConcurrencyEnableCount;
         *disable_count = ACDConcurrencyDisableCount;
     } else if (type == PAL_STREAM_VOICE_UI) {
-        *enable_count = concurrencyEnableCount;
         *disable_count = concurrencyDisableCount;
     } else if (type == PAL_STREAM_ASR) {
-        *enable_count = ASRConcurrencyEnableCount;
         *disable_count = ASRConcurrencyDisableCount;
     } else if (type == PAL_STREAM_SENSOR_PCM_DATA) {
-        *enable_count = SNSPCMDataConcurrencyEnableCount;
         *disable_count = SNSPCMDataConcurrencyDisableCount;
     } else {
         PAL_ERR(LOG_TAG, "Error:%d Invalid stream type %d", -EINVAL, type);
         return;
     }
 
-    PAL_INFO(LOG_TAG, "conc enable cnt %d, conc disable count %d",
-        *enable_count, *disable_count);
+    PAL_INFO(LOG_TAG, "conc disable count %d", *disable_count);
 }
 
 bool ResourceManager::IsLowLatencyBargeinSupported() {
@@ -5499,21 +5553,28 @@ int ResourceManager::StartOtherDetectionStreams(void *st) {
     return 0;
 }
 
-void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
-                         pal_stream_type_t in_type, pal_stream_direction_t dir,
+void ResourceManager::GetConcurrencyInfo(Stream* s, bool active,
                          bool *rx_conc, bool *tx_conc, bool *conc_en)
 {
+    int32_t status  = 0;
     bool voice_conc_enable = IsVoiceCallConcurrencySupported();
     bool voip_conc_enable = IsVoipConcurrencySupported();
     bool low_latency_bargein_enable = IsLowLatencyBargeinSupported();
     bool audio_capture_conc_enable = IsAudioCaptureConcurrencySupported();
+    struct pal_stream_attributes sAttr = {};
 
-    if (dir == PAL_AUDIO_OUTPUT) {
-        if (in_type == PAL_STREAM_LOW_LATENCY && !low_latency_bargein_enable) {
+    status = s->getStreamAttributes(&sAttr);
+    if (status) {
+        PAL_ERR(LOG_TAG, "stream get attributes failed");
+        return;
+    }
+
+    if (sAttr.direction == PAL_AUDIO_OUTPUT) {
+        if (sAttr.type == PAL_STREAM_LOW_LATENCY && !low_latency_bargein_enable) {
             PAL_VERBOSE(LOG_TAG, "Ignore low latency playback stream");
-        } else if (in_type == PAL_STREAM_SENSOR_PCM_RENDERER) {
+        } else if (sAttr.type == PAL_STREAM_SENSOR_PCM_RENDERER) {
             PAL_VERBOSE(LOG_TAG, "Ignore sensor renderer stream");
-        } else if (in_type == PAL_STREAM_HAPTICS) {
+        } else if (sAttr.type == PAL_STREAM_HAPTICS) {
             PAL_VERBOSE(LOG_TAG, "Ignore haptics stream");
         } else {
             *rx_conc = true;
@@ -5529,31 +5590,35 @@ void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
      * and voice call should also be disabled even voice_conc_enable
      * or voip_conc_enable is set to true.
      */
-    if (in_type == PAL_STREAM_VOICE_CALL) {
+    if (sAttr.type == PAL_STREAM_VOICE_CALL) {
         *tx_conc = true;
         *rx_conc = true;
         if (!audio_capture_conc_enable || !voice_conc_enable) {
             PAL_DBG(LOG_TAG, "pause on voice concurrency");
             *conc_en = false;
         }
-    } else if (in_type == PAL_STREAM_VOIP_TX) {
+    } else if (sAttr.type == PAL_STREAM_VOIP_TX) {
         *tx_conc = true;
         if (!audio_capture_conc_enable || !voip_conc_enable) {
             PAL_DBG(LOG_TAG, "pause on voip concurrency");
             *conc_en = false;
         }
-    } else if (dir == PAL_AUDIO_INPUT &&
-               (in_type != PAL_STREAM_ACD &&
-                in_type != PAL_STREAM_SENSOR_PCM_DATA &&
-                in_type != PAL_STREAM_CONTEXT_PROXY  &&
-                in_type != PAL_STREAM_VOICE_UI &&
-                in_type != PAL_STREAM_ASR)) {
+    } else if (sAttr.type == PAL_STREAM_ACD ||
+               sAttr.type == PAL_STREAM_SENSOR_PCM_DATA ||
+               sAttr.type == PAL_STREAM_VOICE_UI ||
+               sAttr.type == PAL_STREAM_ASR) {
+        if (!s->ConfigSupportLPI()) {
+            *tx_conc = true;
+            PAL_DBG(LOG_TAG, "ST stream type: %d is in NLPI", sAttr.type);
+        }
+    } else if (sAttr.direction == PAL_AUDIO_INPUT &&
+               sAttr.type != PAL_STREAM_CONTEXT_PROXY) {
         *tx_conc = true;
-        if (!audio_capture_conc_enable && in_type != PAL_STREAM_PROXY) {
+        if (!audio_capture_conc_enable && sAttr.type != PAL_STREAM_PROXY) {
             PAL_DBG(LOG_TAG, "pause on audio capture concurrency");
             *conc_en = false;
         }
-    } else if (in_type == PAL_STREAM_LOOPBACK){
+    } else if (sAttr.type == PAL_STREAM_LOOPBACK){
         *tx_conc = true;
         *rx_conc = true;
         if (!audio_capture_conc_enable) {
@@ -5563,7 +5628,7 @@ void ResourceManager::GetConcurrencyInfo(pal_stream_type_t st_type,
     }
 
     PAL_INFO(LOG_TAG, "stream type %d Tx conc %d, Rx conc %d, concurrency%s allowed",
-        in_type, *tx_conc, *rx_conc, *conc_en? "" : " not");
+        sAttr.type, *tx_conc, *rx_conc, *conc_en? "" : " not");
 }
 
 void ResourceManager::HandleStreamPauseResume(pal_stream_type_t st_type, bool active)
@@ -5672,20 +5737,30 @@ bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
 
     /*
      * When switching from NLPI to LPI:
-     * 1. If low latency bargein is enabled, nlpi to lpi switch
-     *    will be delayed by 5s until sleep is done in thread
+     * 1. If current deferred switch state is LPI to NLPI switch,
+     *    just reset deferred switch state and switch count, as final
+          state would be NLPI, which is current state, hence no change needed.
+     * 2. If low latency bargein is enabled, nlpi to lpi switch
+     *    will be deferred by 5s until sleep is done in thread
      *    voiceUIDeferredSwitchLoop.
-     * 2. Else if there's any VoiceUI stream in buffering, delay
-     *    switch until buffering is done.
+     * 2. If there's any VoiceUI stream in buffering, defer switch
+     *    until buffering is done.
      *
      * When switching from LPI to NLPI:
-     * 1. If there's any VoiceUI stream in buffering, delay switch
+     * 1. If current deferred switch state is NLPI to LPI switch,
+     *    just reset deferred switch state and switch count, as final
+          state would be LPI, which is current state, hence no change needed.
+     * 2. If there's any VoiceUI stream in buffering, delay switch
      *    until buffering is done.
-     * 2. Additionally if low latency bargein is enabled and there's
-     *    pending NLPI to LPI switch, then skip the pending switch
-     *    and exit the sleep in voiceUIDeferredSwitchLoop.
      */
     if (!stream_active) {
+        if (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) {
+            deferredSwitchState = NO_DEFER;
+            PAL_INFO(LOG_TAG, "LPI to NLPI switch cancelled");
+            if (IsLowLatencyBargeinSupported())
+                deferred_switch_cnt_ = -1;
+            return true;
+        }
         if (IsLowLatencyBargeinSupported() && active_streams_st.size()) {
             deferredSwitchState =
                 (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) ? NO_DEFER :
@@ -5696,32 +5771,29 @@ bool ResourceManager::checkAndUpdateDeferSwitchState(bool stream_active)
             deferred_switch_cnt_ = NLPI_LPI_SWITCH_DELAY_SEC;
             vui_switch_cv_.notify_all();
             return true;
-        } else if (isAnyVUIStreamBuffering()) {
-            deferredSwitchState =
-                (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) ? NO_DEFER :
-                 DEFER_NLPI_LPI_SWITCH;
+        }
+        if (isAnyVUIStreamBuffering()) {
+            deferredSwitchState = DEFER_NLPI_LPI_SWITCH;
             PAL_INFO(LOG_TAG,
                 "VUI stream in buffering, defer NLPI->LPI switch, deferred state:%d",
                 deferredSwitchState);
             return true;
         }
     } else {
+        if (deferredSwitchState == DEFER_NLPI_LPI_SWITCH) {
+            deferredSwitchState = NO_DEFER;
+            PAL_INFO(LOG_TAG, "NLPI to LPI switch cancelled");
+            if (IsLowLatencyBargeinSupported()) {
+                deferred_switch_cnt_ = -1;
+            }
+            return true;
+        }
         if (isAnyVUIStreamBuffering()) {
-            deferredSwitchState =
-                (deferredSwitchState == DEFER_NLPI_LPI_SWITCH) ? NO_DEFER :
-                 DEFER_LPI_NLPI_SWITCH;
+            deferredSwitchState = DEFER_LPI_NLPI_SWITCH;
             PAL_INFO(LOG_TAG,
                 "VUI stream in buffering, defer LPI->NLPI switch, deferred state:%d,"
                 " LPI will be used until buffering done, hence EC won't be applied",
                 deferredSwitchState);
-            return true;
-        }
-        if (IsLowLatencyBargeinSupported() &&
-            deferredSwitchState == DEFER_NLPI_LPI_SWITCH) {
-            deferredSwitchState = NO_DEFER;
-            deferred_switch_cnt_ = -1;
-            PAL_INFO(LOG_TAG,
-                "Cancel pending NLPI to LPI switch as new concurrency coming");
             return true;
         }
     }
@@ -5822,15 +5894,13 @@ bool ResourceManager::isAnyVUIStreamBuffering()
     return false;
 }
 
-void ResourceManager::ConcurrentStreamStatus(pal_stream_type_t type,
-                                             pal_stream_direction_t dir,
+void ResourceManager::ConcurrentStreamStatus(Stream* s,
                                              bool active)
 {
-    HandleConcurrencyForSoundTriggerStreams(type, dir, active);
+    HandleConcurrencyForSoundTriggerStreams(s, active);
 }
 
-void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t type,
-                                                             pal_stream_direction_t dir,
+void ResourceManager::HandleConcurrencyForSoundTriggerStreams(Stream* s,
                                                              bool active)
 {
     std::vector<pal_stream_type_t> st_streams;
@@ -5838,14 +5908,53 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
     bool use_lpi_temp = use_lpi_;
     bool st_stream_conc_en = true;
     bool notify_resources_available = false;
+    bool st_stream_tx_conc = false;
+    bool st_stream_rx_conc = false;
 
     mActiveStreamMutex.lock();
-    PAL_DBG(LOG_TAG, "Enter, stream type %d, direction %d, active %d", type, dir, active);
+    PAL_DBG(LOG_TAG, "Enter, stream: %pK, active %d", s, active);
 
     if (deferredSwitchState == DEFER_LPI_NLPI_SWITCH) {
         use_lpi_temp = false;
     } else if (deferredSwitchState == DEFER_NLPI_LPI_SWITCH) {
         use_lpi_temp = true;
+    }
+
+    GetConcurrencyInfo(s, active, &st_stream_rx_conc, &st_stream_tx_conc, &st_stream_conc_en);
+
+    if (st_stream_rx_conc || st_stream_tx_conc) {
+        if (active)
+            registerNLPIStream(s);
+        else
+            deregisterNLPIStream(s);
+    }
+
+    if (st_stream_tx_conc) {
+        if (active)
+            TxconcurrencyEnableCount++;
+        else if (TxconcurrencyEnableCount > 0)
+            TxconcurrencyEnableCount--;
+    }
+
+    if (st_stream_conc_en && (st_stream_rx_conc || st_stream_tx_conc)) {
+        if (!isNLPISwitchSupported()) {
+            PAL_INFO(LOG_TAG,
+                     "Skip switch as st stream LPI/NLPI switch disabled");
+        } else if (active) {
+            if (mNLPIStreams.size() > 0) {
+                if (use_lpi_temp) {
+                    do_st_stream_switch = true;
+                    use_lpi_temp = false;
+                }
+            }
+        } else {
+            if (mNLPIStreams.size() == 0) {
+                if (!(active_streams_st.size() && charging_state_ && IsTransitToNonLPIOnChargingSupported())) {
+                    do_st_stream_switch = true;
+                    use_lpi_temp = true;
+                }
+            }
+        }
     }
 
     st_streams.push_back(PAL_STREAM_VOICE_UI);
@@ -5854,66 +5963,17 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(pal_stream_type_t 
     st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
 
     for (pal_stream_type_t st_stream_type : st_streams) {
-        bool st_stream_tx_conc = false;
-        bool st_stream_rx_conc = false;
-
-        GetConcurrencyInfo(st_stream_type, type, dir,
-                           &st_stream_rx_conc, &st_stream_tx_conc, &st_stream_conc_en);
-
         if (!st_stream_conc_en) {
             if (st_stream_type == PAL_STREAM_VOICE_UI &&
                 concurrencyDisableCount == 1 && !active)
                 notify_resources_available = true;
             HandleStreamPauseResume(st_stream_type, active);
-            continue;
-        }
-        if (st_stream_tx_conc) {
-            if (active)
-                TxconcurrencyEnableCount++;
-            else if (TxconcurrencyEnableCount > 0)
-                TxconcurrencyEnableCount--;
-        }
-        if (st_stream_conc_en && (st_stream_tx_conc || st_stream_rx_conc)) {
-            if (!IsLPISupported() || !isNLPISwitchSupported()) {
-                PAL_INFO(LOG_TAG,
-                         "Skip switch as st_stream %d LPI disabled/NLPI switch disabled", st_stream_type);
-            } else if (active) {
-                if ((PAL_STREAM_VOICE_UI == st_stream_type && ++concurrencyEnableCount == 1) ||
-                    (PAL_STREAM_ACD == st_stream_type && ++ACDConcurrencyEnableCount == 1) ||
-                    (PAL_STREAM_ASR == st_stream_type && ++ASRConcurrencyEnableCount == 1) ||
-                    (PAL_STREAM_SENSOR_PCM_DATA == st_stream_type && ++SNSPCMDataConcurrencyEnableCount == 1)) {
-                    if (use_lpi_temp) {
-                        do_st_stream_switch = true;
-                        use_lpi_temp = false;
-                    }
-                }
-            } else {
-                if ((PAL_STREAM_VOICE_UI == st_stream_type && --concurrencyEnableCount == 0) ||
-                    (PAL_STREAM_ACD == st_stream_type && --ACDConcurrencyEnableCount == 0) ||
-                    (PAL_STREAM_ASR == st_stream_type && --ASRConcurrencyEnableCount == 0) ||
-                    (PAL_STREAM_SENSOR_PCM_DATA == st_stream_type && --SNSPCMDataConcurrencyEnableCount == 0)) {
-                    if (!(active_streams_st.size() && charging_state_ && IsTransitToNonLPIOnChargingSupported())) {
-                        do_st_stream_switch = true;
-                        use_lpi_temp = true;
-                    }
-                }
-            }
         }
     }
 
-    /* Reset enable counts to 0 if they are negative */
-    if (concurrencyEnableCount < 0)
-        concurrencyEnableCount = 0;
-    if (ACDConcurrencyEnableCount < 0)
-        ACDConcurrencyEnableCount = 0;
-    if (ASRConcurrencyEnableCount < 0)
-        ASRConcurrencyEnableCount = 0;
-    if (SNSPCMDataConcurrencyEnableCount < 0)
-        SNSPCMDataConcurrencyEnableCount = 0;
-
     if (do_st_stream_switch) {
         if (checkAndUpdateDeferSwitchState(active)) {
-            PAL_DBG(LOG_TAG, "Switch is deferred");
+            PAL_DBG(LOG_TAG, "Switch is deferred/cancelled");
         } else {
             use_lpi_ = use_lpi_temp;
             handleConcurrentStreamSwitch(st_streams);
@@ -8732,6 +8792,7 @@ int32_t ResourceManager::forceDeviceSwitch(std::shared_ptr<Device> inDev,
     int status = 0;
     std::vector <std::tuple<Stream *, uint32_t>> streamDevDisconnect, streamsSkippingSwitch;
     std::vector <std::tuple<Stream *, struct pal_device *>> streamDevConnect;
+    std::vector <std::tuple<Stream *, uint32_t>> sharedBEStreamDev;
     std::vector<Stream*>::iterator sIter;
 
     if (!inDev || !newDevAttr) {
@@ -8764,6 +8825,32 @@ int32_t ResourceManager::forceDeviceSwitch(std::shared_ptr<Device> inDev,
     }
 
     status = streamDevSwitch(streamDevDisconnect, streamDevConnect);
+    if (status) {
+        PAL_ERR(LOG_TAG, "forceDeviceSwitch failed %d, reset usecases", status);
+        struct pal_device curDevAttr  = {};
+        std::shared_ptr<Device> curDev = nullptr;
+
+        mActiveStreamMutex.lock();
+        getSharedBEActiveStreamDevs(sharedBEStreamDev, newDevAttr->id);
+        if (sharedBEStreamDev.size() > 0) {
+            curDevAttr.id = (pal_device_id_t)std::get<1>(sharedBEStreamDev[0]);
+            curDev = Device::getInstance(&curDevAttr, rm);
+            if (!curDev) {
+                PAL_ERR(LOG_TAG, "Getting Device instance failed");
+                mActiveStreamMutex.unlock();
+                return 0;
+            }
+            curDev->getDeviceAttributes(&curDevAttr);
+            ar_mem_cpy(newDevAttr, sizeof(struct pal_device),
+                      &curDevAttr, sizeof(struct pal_device));
+            for (const auto &elem : sharedBEStreamDev) {
+                streamDevDisconnect.push_back(elem);
+                streamDevConnect.push_back({std::get<0>(elem), &curDevAttr});
+            }
+        }
+        mActiveStreamMutex.unlock();
+        status = streamDevSwitch(streamDevDisconnect, streamDevConnect);
+    }
     if (!status) {
         mActiveStreamMutex.lock();
         for (sIter = prevActiveStreams.begin(); sIter != prevActiveStreams.end(); sIter++) {
@@ -8779,8 +8866,6 @@ int32_t ResourceManager::forceDeviceSwitch(std::shared_ptr<Device> inDev,
             }
         }
         mActiveStreamMutex.unlock();
-    } else {
-        PAL_ERR(LOG_TAG, "forceDeviceSwitch failed %d", status);
     }
 
     return 0;
@@ -9046,6 +9131,7 @@ int ResourceManager::setConfigParams(struct str_parms *parms)
     ret = setContextManagerEnableParam(parms, value, len);
 
     ret = setUpdDedicatedBeEnableParam(parms, value, len);
+    ret = setUpdCustomGainParam(parms, value, len);
     ret = setDualMonoEnableParam(parms, value, len);
     ret = setSignalHandlerEnableParam(parms, value, len);
     ret = setMuxconfigEnableParam(parms, value, len);
@@ -9281,6 +9367,27 @@ int ResourceManager::setUpdVirtualPortParam(struct str_parms *parms, char *value
         str_parms_del(parms, AUDIO_PARAMETER_KEY_UPD_VIRTUAL_PORT);
     }
 
+    return ret;
+}
+
+int ResourceManager::setUpdCustomGainParam(struct str_parms *parms,
+                                 char *value, int len)
+{
+    int ret = -EINVAL;
+
+    if (!value || !parms)
+        return ret;
+
+    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_UPD_SET_CUSTOM_GAIN,
+                            value, len);
+    PAL_VERBOSE(LOG_TAG," value %s", value);
+
+    if (ret >= 0) {
+        if (value && !strncmp(value, "true", sizeof("true")))
+            ResourceManager::isUpdSetCustomGainEnabled = true;
+
+        str_parms_del(parms, AUDIO_PARAMETER_KEY_UPD_SET_CUSTOM_GAIN);
+    }
     return ret;
 }
 
@@ -12302,7 +12409,7 @@ void ResourceManager::onChargingStateChange()
     bool need_switch = false;
     bool use_lpi_temp = false;
 
-    // no need to handle car mode if no Voice Stream exists
+    // no need to handle car mode if no VoiceUI Stream exists
     if (active_streams_st.size() == 0)
         return;
 
@@ -12310,7 +12417,7 @@ void ResourceManager::onChargingStateChange()
         use_lpi_temp = false;
         need_switch = true;
     } else if (!charging_state_ && !use_lpi_) {
-        if (!concurrencyEnableCount) {
+        if (!mNLPIStreams.size()) {
             use_lpi_temp = true;
             need_switch = true;
         }
@@ -12365,7 +12472,7 @@ void ResourceManager::onVUIStreamDeregistered()
     if (active_streams_sensor_pcm_data.size())
         st_streams.push_back(PAL_STREAM_SENSOR_PCM_DATA);
 
-    if (!use_lpi_ && !concurrencyEnableCount) {
+    if (!use_lpi_ && !mNLPIStreams.size()) {
         use_lpi_ = true;
         handleConcurrentStreamSwitch(st_streams);
     }
@@ -14695,4 +14802,129 @@ void ResourceManager::reconfigureScoStreams() {
     }
     mActiveStreamMutex.unlock();
     for (auto dAttr : palDevices) free(dAttr);
+}
+
+int ResourceManager::setUltrasoundGain(pal_ultrasound_gain_t gain, Stream *s)
+{
+    int32_t status = 0;
+
+    struct pal_device dAttr;
+    StreamUltraSound *updStream = NULL;
+    std::vector<Stream*> activeStreams;
+    struct pal_stream_attributes sAttr;
+    struct pal_stream_attributes sAttr1;
+    std::vector<std::shared_ptr<Device>> activeDeviceList;
+    pal_ultrasound_gain_t gain_2 = PAL_ULTRASOUND_GAIN_MUTE;
+
+    PAL_INFO(LOG_TAG, "Entered. Gain = %d", gain);
+
+    if (!IsCustomGainEnabledForUPD()) {
+        PAL_ERR(LOG_TAG,"Custom Gain not enabled for UPD, returning");
+        return status;
+    }
+
+    if (s) {
+        status = s->getStreamAttributes(&sAttr);
+        if (status != 0) {
+            PAL_ERR(LOG_TAG,"stream get attributes failed");
+            return -ENOENT;
+        }
+    }
+
+    if (PAL_STREAM_ULTRASOUND == sAttr.type) {
+        updStream =  static_cast<StreamUltraSound *> (s);
+    } else {
+        status = getActiveStream_l(activeStreams, NULL);
+        if ((0 != status) || (activeStreams.size() == 0)) {
+            PAL_DBG(LOG_TAG, "No active stream available, status = %d, nStream = %d",
+                    status, activeStreams.size());
+            return -ENOENT;
+        }
+
+        for (int i = 0; i < activeStreams.size(); i++) {
+            status = (static_cast<Stream *> (activeStreams[i]))->getStreamAttributes(&sAttr1);
+            if (0 != status) {
+                PAL_DBG(LOG_TAG, "Fail to get Stream Attributes, status = %d", status);
+                continue;
+            }
+
+            if (PAL_STREAM_ULTRASOUND == sAttr1.type) {
+                updStream = static_cast<StreamUltraSound *> (activeStreams[i]);
+                /* Found UPD stream, break here */
+                PAL_INFO(LOG_TAG, "Found UPD Stream = %p", updStream);
+                break;
+            }
+        }
+    }
+    /* Skip if we do not found upd stream or UPD stream is not active*/
+    if (!updStream || !updStream->isActive()) {
+        PAL_INFO(LOG_TAG, "Either UPD Stream not found or not active, returning");
+        return 0;
+    }
+
+
+    if (!isDeviceSwitch && (PAL_STREAM_ULTRASOUND != sAttr.type))
+        status = updStream->setUltraSoundGain(gain);
+    else
+        status = updStream->setUltraSoundGain_l(gain);
+
+    if (0 != status) {
+        PAL_ERR(LOG_TAG, "SetParameters failed, status = %d", status);
+        return status;
+    }
+
+    PAL_INFO(LOG_TAG, "Ultrasound gain(%d) set, status = %d", gain, status);
+
+    /* If provided gain is MUTE then in some cases we may need to set new gain LOW/HIGH based on
+     * concurrencies.
+     *
+     * Skip setting new gain if,
+     * - currently set gain is not Mute
+     * - or if device switch is active (new gain will be set once new device is active)
+     *
+     * This should avoid multiple set gain calls while stream is being closed/in middle of device switch
+     */
+
+    if ((PAL_ULTRASOUND_GAIN_MUTE != gain) || isDeviceSwitch) {
+        return 0;
+    }
+
+    /* Find new GAIN value based on currently active devices */
+    getActiveDevices_l(activeDeviceList);
+    for (int i = 0; i < activeDeviceList.size(); i++) {
+        status = activeDeviceList[i]->getDeviceAttributes(&dAttr);
+        if (0 != status) {
+            PAL_ERR(LOG_TAG, "Fail to get device attribute for device %p, status = %d",
+                    &activeDeviceList[i], status);
+            continue;
+        }
+        if (PAL_DEVICE_OUT_SPEAKER == dAttr.id) {
+            gain_2 = PAL_ULTRASOUND_GAIN_HIGH;
+            /* Only breaking here as we want to give priority to speaker device */
+            break;
+        } else if ((PAL_DEVICE_OUT_ULTRASOUND == dAttr.id) ||
+                   (PAL_DEVICE_OUT_HANDSET == dAttr.id) ||
+                   (PAL_DEVICE_OUT_ULTRASOUND_DEDICATED == dAttr.id)) {
+            gain_2 = PAL_ULTRASOUND_GAIN_LOW;
+        }
+    }
+
+    if (PAL_ULTRASOUND_GAIN_MUTE != gain_2) {
+        /* Currently configured value is 20ms which allows 3 to 4 process call
+         * to handle this value at ADSP side.
+         * Increase or decrease this dealy based on requirements */
+        usleep(20000);
+        if (PAL_STREAM_ULTRASOUND != sAttr.type)
+            status = updStream->setUltraSoundGain(gain_2);
+        else
+            status = updStream->setUltraSoundGain_l(gain_2);
+
+        if (0 != status) {
+            PAL_ERR(LOG_TAG, "SetParameters failed, status = %d", status);
+            return status;
+        }
+        PAL_INFO(LOG_TAG, "Ultrasound gain(%d) set, status = %d", gain_2, status);
+    }
+
+    return status;
 }

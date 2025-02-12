@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
  *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -1079,6 +1079,7 @@ typedef enum {
     PAL_PARAM_ID_ASR_OUTPUT = 81,
     PAL_PARAM_ID_ASR_SET_PARAM = 82,
     PAL_PARAM_ID_HAPTICS_MODE = 83,
+    PAL_PARAM_ID_ULTRASOUND_SET_GAIN = 84,
 } pal_param_id_type_t;
 
 /** HDMI/DP */
@@ -1364,6 +1365,14 @@ typedef struct pal_bt_lc3_payload_s {
 typedef struct pal_param_haptics_intensity {
     int intensity;
 } pal_param_haptics_intensity_t;
+
+/* Type of Ultrasound Gain */
+typedef enum {
+    PAL_ULTRASOUND_GAIN_MUTE = 0,
+    PAL_ULTRASOUND_GAIN_LOW,
+    PAL_ULTRASOUND_GAIN_HIGH,
+} pal_ultrasound_gain_t;
+
 
 /**< PAL device */
 #define DEVICE_NAME_MAX_SIZE 128
