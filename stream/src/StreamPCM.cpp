@@ -58,6 +58,12 @@ StreamPCM::StreamPCM(const struct pal_stream_attributes *sattr, struct pal_devic
         throw std::runtime_error("Sound card offline/standby");
     }
 
+    if (!sattr || !dattr) {
+        PAL_ERR(LOG_TAG,"invalid arguments");
+        mStreamMutex.unlock();
+        throw std::runtime_error("invalid arguments");
+    }
+
     session = NULL;
     mGainLevel = -1;
     std::shared_ptr<Device> dev = nullptr;
@@ -88,16 +94,12 @@ StreamPCM::StreamPCM(const struct pal_stream_attributes *sattr, struct pal_devic
     mVolumeData->volume_pair[0].channel_mask = 0x03;
     mVolumeData->volume_pair[0].vol = 1.0f;
 
-    if (!sattr || !dattr) {
-        PAL_ERR(LOG_TAG,"invalid arguments");
-        mStreamMutex.unlock();
-        throw std::runtime_error("invalid arguments");
-    }
-
     attribute_size = sizeof(struct pal_stream_attributes);
     mStreamAttr = (struct pal_stream_attributes *) calloc(1, attribute_size);
     if (!mStreamAttr) {
         PAL_ERR(LOG_TAG, "malloc for stream attributes failed %s", strerror(errno));
+        free(mVolumeData);
+        mVolumeData = NULL;
         mStreamMutex.unlock();
         throw std::runtime_error("failed to malloc for stream attributes");
     }
@@ -117,7 +119,10 @@ StreamPCM::StreamPCM(const struct pal_stream_attributes *sattr, struct pal_devic
     session = Session::makeSession(rm, sattr);
     if (!session) {
         PAL_ERR(LOG_TAG, "session creation failed");
+        free(mVolumeData);
+        mVolumeData = NULL;
         free(mStreamAttr);
+        mStreamAttr = NULL;
         mStreamMutex.unlock();
         throw std::runtime_error("failed to create session object");
     }
@@ -145,8 +150,11 @@ StreamPCM::StreamPCM(const struct pal_stream_attributes *sattr, struct pal_devic
         if (!dev) {
             PAL_ERR(LOG_TAG, "Device creation failed");
             free(mStreamAttr);
-
-            //TBD::free session too
+            mStreamAttr = NULL;
+            free(mVolumeData);
+            mVolumeData = NULL;
+            delete session;
+            session = nullptr;
             mStreamMutex.unlock();
             if (str_registered) {
                 rm->deregisterStream(this);
