@@ -5553,7 +5553,7 @@ int ResourceManager::StartOtherDetectionStreams(void *st) {
     return 0;
 }
 
-void ResourceManager::GetConcurrencyInfo(Stream* s, bool active,
+void ResourceManager::GetConcurrencyInfo(Stream* s,
                          bool *rx_conc, bool *tx_conc, bool *conc_en)
 {
     int32_t status  = 0;
@@ -5920,14 +5920,7 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(Stream* s,
         use_lpi_temp = true;
     }
 
-    GetConcurrencyInfo(s, active, &st_stream_rx_conc, &st_stream_tx_conc, &st_stream_conc_en);
-
-    if (st_stream_rx_conc || st_stream_tx_conc) {
-        if (active)
-            registerNLPIStream(s);
-        else
-            deregisterNLPIStream(s);
-    }
+    GetConcurrencyInfo(s, &st_stream_rx_conc, &st_stream_tx_conc, &st_stream_conc_en);
 
     if (st_stream_tx_conc) {
         if (active)
@@ -5941,6 +5934,7 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(Stream* s,
             PAL_INFO(LOG_TAG,
                      "Skip switch as st stream LPI/NLPI switch disabled");
         } else if (active) {
+            registerNLPIStream(s);
             if (mNLPIStreams.size() > 0) {
                 if (use_lpi_temp) {
                     do_st_stream_switch = true;
@@ -5948,6 +5942,7 @@ void ResourceManager::HandleConcurrencyForSoundTriggerStreams(Stream* s,
                 }
             }
         } else {
+            deregisterNLPIStream(s);
             if (mNLPIStreams.size() == 0) {
                 if (!(active_streams_st.size() && charging_state_ && IsTransitToNonLPIOnChargingSupported())) {
                     do_st_stream_switch = true;
