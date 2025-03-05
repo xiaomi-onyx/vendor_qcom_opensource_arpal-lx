@@ -563,6 +563,7 @@ protected:
     static std::mutex mActiveStreamMutex;
     static std::mutex mSleepMonitorMutex;
     static std::mutex mListFrontEndsMutex;
+    static std::mutex mNlpiStreamListMutex;
     static int snd_virt_card;
     static int snd_hw_card;
 

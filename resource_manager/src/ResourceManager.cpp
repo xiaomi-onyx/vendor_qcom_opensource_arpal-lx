@@ -478,6 +478,7 @@ std::mutex ResourceManager::mGraphMutex;
 std::mutex ResourceManager::mActiveStreamMutex;
 std::mutex ResourceManager::mSleepMonitorMutex;
 std::mutex ResourceManager::mListFrontEndsMutex;
+std::mutex ResourceManager::mNlpiStreamListMutex;
 std::vector <int> ResourceManager::listAllFrontEndIds = {0};
 std::vector <int> ResourceManager::listFreeFrontEndIds = {0};
 std::vector <int> ResourceManager::listAllPcmPlaybackFrontEnds = {0};
@@ -4769,14 +4770,14 @@ bool ResourceManager::IsHapticsThroughWSA()
 
 void ResourceManager::registerNLPIStream(Stream *s)
 {
-    std::lock_guard<std::mutex> lck(mResourceManagerMutex);
+    std::lock_guard<std::mutex> lck(mNlpiStreamListMutex);
     PAL_DBG(LOG_TAG, "register NLPI stream: %pK", s);
     mNLPIStreams.insert(s);
 }
 
 void ResourceManager::deregisterNLPIStream(Stream *s)
 {
-    std::lock_guard<std::mutex> lck(mResourceManagerMutex);
+    std::lock_guard<std::mutex> lck(mNlpiStreamListMutex);
     PAL_DBG(LOG_TAG, "deregister NLPI stream: %pK", s);
     mNLPIStreams.erase(s);
 }
