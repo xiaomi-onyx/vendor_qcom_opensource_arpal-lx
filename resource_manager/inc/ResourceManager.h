@@ -563,6 +563,7 @@ protected:
     static std::mutex mActiveStreamMutex;
     static std::mutex mSleepMonitorMutex;
     static std::mutex mListFrontEndsMutex;
+    static std::mutex mNlpiStreamListMutex;
     static int snd_virt_card;
     static int snd_hw_card;
 
@@ -967,7 +968,7 @@ public:
     int handleMixerEvent(struct mixer *mixer, char *mixer_str);
     int StopOtherDetectionStreams(void *st);
     int StartOtherDetectionStreams(void *st);
-    void GetConcurrencyInfo(Stream* s, bool active,
+    void GetConcurrencyInfo(Stream* s,
                          bool *rx_conc, bool *tx_conc, bool *conc_en);
     void ConcurrentStreamStatus(Stream* s, bool active);
     void HandleConcurrencyForSoundTriggerStreams(Stream* s, bool active);
