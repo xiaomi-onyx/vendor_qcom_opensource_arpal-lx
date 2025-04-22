@@ -916,6 +916,11 @@ public:
             std::vector <std::tuple<Stream *, uint32_t>> &streamDevDisconnect,
             std::vector <std::tuple<Stream *, struct pal_device *>> &StreamDevConnect,
             std::vector <std::tuple<Stream *, uint32_t>> &streamsSkippingSwitch);
+
+    void handleHFPConcurrency (
+            Stream* streamHandle,
+            std::vector <std::tuple<Stream *, uint32_t>> &streamDevDisconnect,
+            std::vector <std::tuple<Stream *, struct pal_device *>> &StreamDevConnect);
     int32_t forceDeviceSwitch(std::shared_ptr<Device> inDev, struct pal_device *newDevAttr);
     int32_t forceDeviceSwitch(std::shared_ptr<Device> inDev, struct pal_device *newDevAttr,
                               std::vector <Stream *> prevActiveStreams);
@@ -1068,6 +1073,7 @@ public:
     bool isPluginDevice(pal_device_id_t id);
     bool isDpDevice(pal_device_id_t id);
     bool isPluginPlaybackDevice(pal_device_id_t id);
+    bool isHFPUsecase(Stream* streamHandle);
 
     /* Separate device reference counts are maintained in PAL device and GSL device SGs.
      * lock graph is to sychronize these reference counts during device and session operations
