@@ -2194,6 +2194,11 @@ int32_t Stream::switchDevice(Stream* streamHandle, uint32_t numDev, struct pal_d
         goto done;
     }
 
+    /* Handle scenario when there is HFP call.
+       e.g. need to disconnect old devices totaly before switching new devices for HFP call*/
+    if (rm->isHFPUsecase(streamHandle))
+        rm->handleHFPConcurrency(streamHandle, streamDevDisconnect, StreamDevConnect);
+
     mStreamMutex.unlock();
     rm->unlockActiveStream();
 
